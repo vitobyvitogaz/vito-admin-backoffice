@@ -25,23 +25,26 @@ export default function LoginPage() {
         `${process.env.NEXT_PUBLIC_API_URL}/auth/login`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
         }
       );
 
-      // ✅ LECTURE DU JSON UNE SEULE FOIS
-      const data = await response.json();
-
+      // Si la réponse n'est pas OK, essayer de parser le JSON sinon lancer une erreur
       if (!response.ok) {
-        throw new Error(
-          data?.message || "Email ou mot de passe incorrect"
-        );
+        let errorMessage = "Email ou mot de passe incorrect";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch (err) {
+          console.warn("Erreur JSON:", err);
+        }
+        throw new Error(errorMessage);
       }
 
-      // ✅ Stockage du token
+      const data = await response.json();
+
+      // Sauvegarder le token
       setAuthToken(data.access_token);
 
       toast({
@@ -53,10 +56,9 @@ export default function LoginPage() {
       router.push("/");
     } catch (error: any) {
       console.error("Erreur de connexion :", error);
-
       toast({
         title: "Erreur de connexion",
-        description: error.message || "Une erreur est survenue",
+        description: error.message,
         variant: "destructive",
       });
     } finally {
@@ -74,7 +76,6 @@ export default function LoginPage() {
           <CardTitle className="text-3xl font-bold">VIto Admin</CardTitle>
           <p className="text-gray-500">Back-office Vitogaz Madagascar</p>
         </CardHeader>
-
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
@@ -89,7 +90,6 @@ export default function LoginPage() {
                 disabled={loading}
               />
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="password">Mot de passe</Label>
               <Input
@@ -102,7 +102,6 @@ export default function LoginPage() {
                 disabled={loading}
               />
             </div>
-
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 <>
