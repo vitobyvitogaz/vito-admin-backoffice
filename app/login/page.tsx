@@ -25,14 +25,15 @@ export default function LoginPage() {
         `${process.env.NEXT_PUBLIC_API_URL}/auth/login`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({ email, password }),
         }
       );
 
-      // 🔐 Lire UNE SEULE FOIS la réponse
-      const text = await response.text();
-      const data = text ? JSON.parse(text) : null;
+      // ✅ LECTURE DU JSON UNE SEULE FOIS
+      const data = await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -40,23 +41,22 @@ export default function LoginPage() {
         );
       }
 
-      if (!data?.access_token) {
-        throw new Error("Token manquant dans la réponse serveur");
-      }
-
+      // ✅ Stockage du token
       setAuthToken(data.access_token);
 
       toast({
-        title: "Connexion réussie",
+        title: "Connexion réussie !",
         description: `Bienvenue ${email}`,
+        variant: "success",
       });
 
       router.push("/");
     } catch (error: any) {
       console.error("Erreur de connexion :", error);
+
       toast({
         title: "Erreur de connexion",
-        description: error.message || "Erreur inconnue",
+        description: error.message || "Une erreur est survenue",
         variant: "destructive",
       });
     } finally {
@@ -71,9 +71,10 @@ export default function LoginPage() {
           <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl mx-auto mb-4 flex items-center justify-center">
             <LogIn className="w-8 h-8 text-white" />
           </div>
-          <CardTitle className="text-3xl font-bold">Vito Admin</CardTitle>
+          <CardTitle className="text-3xl font-bold">VIto Admin</CardTitle>
           <p className="text-gray-500">Back-office Vitogaz Madagascar</p>
         </CardHeader>
+
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
