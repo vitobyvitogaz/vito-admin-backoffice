@@ -21,33 +21,42 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/auth/login`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        }
+      );
+
+      // 🔐 Lire UNE SEULE FOIS la réponse
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : null;
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Email ou mot de passe incorrect");
+        throw new Error(
+          data?.message || "Email ou mot de passe incorrect"
+        );
       }
 
-      const data = await response.json();
+      if (!data?.access_token) {
+        throw new Error("Token manquant dans la réponse serveur");
+      }
+
       setAuthToken(data.access_token);
 
       toast({
-        title: "Connexion réussie !",
+        title: "Connexion réussie",
         description: `Bienvenue ${email}`,
-        variant: "success",
       });
 
       router.push("/");
-
     } catch (error: any) {
       console.error("Erreur de connexion :", error);
       toast({
         title: "Erreur de connexion",
-        description: error.message,
+        description: error.message || "Erreur inconnue",
         variant: "destructive",
       });
     } finally {
@@ -62,7 +71,7 @@ export default function LoginPage() {
           <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl mx-auto mb-4 flex items-center justify-center">
             <LogIn className="w-8 h-8 text-white" />
           </div>
-          <CardTitle className="text-3xl font-bold">VIto Admin</CardTitle>
+          <CardTitle className="text-3xl font-bold">Vito Admin</CardTitle>
           <p className="text-gray-500">Back-office Vitogaz Madagascar</p>
         </CardHeader>
         <CardContent>
@@ -79,6 +88,7 @@ export default function LoginPage() {
                 disabled={loading}
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="password">Mot de passe</Label>
               <Input
@@ -91,6 +101,7 @@ export default function LoginPage() {
                 disabled={loading}
               />
             </div>
+
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 <>
