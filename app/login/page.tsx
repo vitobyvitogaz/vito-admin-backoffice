@@ -21,30 +21,33 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/auth/login`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        }
-      );
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-      // Si la réponse n'est pas OK, essayer de parser le JSON sinon lancer une erreur
+      // Si la réponse n'est pas OK, tenter de parser JSON, sinon utiliser text
       if (!response.ok) {
         let errorMessage = "Email ou mot de passe incorrect";
         try {
           const errorData = await response.json();
           errorMessage = errorData.message || errorMessage;
-        } catch (err) {
-          console.warn("Erreur JSON:", err);
+        } catch {
+          const text = await response.text();
+          if (text) errorMessage = text;
         }
         throw new Error(errorMessage);
       }
 
-      const data = await response.json();
+      // Tenter de parser le JSON, avec fallback si vide
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error("Réponse invalide du serveur");
+      }
 
-      // Sauvegarder le token
       setAuthToken(data.access_token);
 
       toast({
