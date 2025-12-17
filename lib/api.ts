@@ -45,9 +45,12 @@ export async function apiFetch(
  */
 export async function apiGet<T>(url: string): Promise<T> {
   const response = await apiFetch(url, { method: 'GET' });
+  
   if (!response.ok) {
-    throw new Error(`API Error: ${response.status}`);
+    const errorText = await response.text();
+    throw new Error(`API Error ${response.status}: ${errorText || response.statusText}`);
   }
+  
   return response.json();
 }
 
@@ -59,9 +62,12 @@ export async function apiPost<T>(url: string, data: any): Promise<T> {
     method: 'POST',
     body: JSON.stringify(data),
   });
+  
   if (!response.ok) {
-    throw new Error(`API Error: ${response.status}`);
+    const errorText = await response.text();
+    throw new Error(`API Error ${response.status}: ${errorText || response.statusText}`);
   }
+  
   return response.json();
 }
 
@@ -73,21 +79,35 @@ export async function apiPatch<T>(url: string, data: any): Promise<T> {
     method: 'PATCH',
     body: JSON.stringify(data),
   });
+  
   if (!response.ok) {
-    throw new Error(`API Error: ${response.status}`);
+    const errorText = await response.text();
+    throw new Error(`API Error ${response.status}: ${errorText || response.statusText}`);
   }
+  
   return response.json();
 }
 
 /**
  * Helper pour DELETE
  */
-export async function apiDelete<T>(url: string): Promise<T> {
+export async function apiDelete(url: string): Promise<void> {
   const response = await apiFetch(url, {
     method: 'DELETE',
   });
+  
   if (!response.ok) {
-    throw new Error(`API Error: ${response.status}`);
+    const errorText = await response.text();
+    throw new Error(`API Error ${response.status}: ${errorText || response.statusText}`);
   }
-  return response.json();
+  
+  // DELETE peut retourner du JSON ou rien
+  const text = await response.text();
+  if (text) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return;
+    }
+  }
 }
