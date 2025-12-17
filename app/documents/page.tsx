@@ -24,6 +24,8 @@ import {
   Eye,
 } from "lucide-react";
 import Link from "next/link";
+import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
+import { toast } from "@/lib/use-toast";
 
 interface Document {
   id: string;
@@ -76,14 +78,18 @@ export default function DocumentsPage() {
 
   const fetchDocuments = async () => {
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/documents`
-      );
-      const data = await response.json();
-      setDocuments(data);
-      setFilteredDocuments(data);
+      const data = await apiGet<Document[]>('/documents');
+      setDocuments(data || []);
+      setFilteredDocuments(data || []);
     } catch (error) {
-      console.error("Erreur chargement documents:", error);
+      console.error("Erreur chargement:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les documents",
+        variant: "destructive",
+      });
+      setDocuments([]);
+      setFilteredDocuments([]);
     } finally {
       setLoading(false);
     }
@@ -93,7 +99,11 @@ export default function DocumentsPage() {
     const file = e.target.files?.[0];
     if (file) {
       if (file.type !== "application/pdf") {
-        alert("Seuls les fichiers PDF sont acceptés");
+        toast({
+          title: "Erreur",
+          description: "Seuls les fichiers PDF sont acceptés",
+          variant: "destructive",
+        });
         return;
       }
       setSelectedFile(file);
@@ -109,38 +119,44 @@ export default function DocumentsPage() {
     e.preventDefault();
 
     if (!formData.file_url && !editingId) {
-      alert("Veuillez sélectionner un fichier PDF");
+      toast({
+        title: "Erreur",
+        description: "Veuillez sélectionner un fichier PDF",
+        variant: "destructive",
+      });
       return;
     }
 
     const payload = {
       ...formData,
       description: formData.description || null,
+      is_active: true,
     };
 
     try {
-      const url = editingId
-        ? `${process.env.NEXT_PUBLIC_API_URL}/documents/${editingId}`
-        : `${process.env.NEXT_PUBLIC_API_URL}/documents`;
-
-      const response = await fetch(url, {
-        method: editingId ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (response.ok) {
-        await fetchDocuments();
-        resetForm();
-        alert(
-          editingId
-            ? "Document modifié avec succès!"
-            : "Document créé avec succès!"
-        );
+      if (editingId) {
+        await apiPatch(`/documents/${editingId}`, payload);
+        toast({
+          title: "Succès !",
+          description: "Document modifié avec succès",
+        });
+      } else {
+        await apiPost('/documents', payload);
+        toast({
+          title: "Succès !",
+          description: "Document créé avec succès",
+        });
       }
+
+      await fetchDocuments();
+      resetForm();
     } catch (error) {
       console.error("Erreur sauvegarde:", error);
-      alert("Erreur lors de la sauvegarde");
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la sauvegarde",
+        variant: "destructive",
+      });
     }
   };
 
@@ -160,18 +176,19 @@ export default function DocumentsPage() {
     if (!confirm("Êtes-vous sûr de vouloir supprimer ce document ?")) return;
 
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/documents/${id}`,
-        { method: "DELETE" }
-      );
-
-      if (response.ok) {
-        await fetchDocuments();
-        alert("Document supprimé!");
-      }
+      await apiDelete(`/documents/${id}`);
+      toast({
+        title: "Succès !",
+        description: "Document supprimé",
+      });
+      await fetchDocuments();
     } catch (error) {
       console.error("Erreur suppression:", error);
-      alert("Erreur lors de la suppression");
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la suppression",
+        variant: "destructive",
+      });
     }
   };
 

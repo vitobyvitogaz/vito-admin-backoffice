@@ -25,6 +25,8 @@ import {
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
+import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
+import { toast } from "@/lib/use-toast";
 
 interface DeliveryCompany {
   id: string;
@@ -32,7 +34,7 @@ interface DeliveryCompany {
   phone: string;
   whatsapp: string | null;
   email: string | null;
-  coverage_area: string[];
+  coverage_area: string;
   is_verified: boolean;
   is_active: boolean;
 }
@@ -66,7 +68,7 @@ export default function DeliveryCompaniesPage() {
       const filtered = companies.filter(
         (c) =>
           c.name.toLowerCase().includes(query) ||
-          c.coverage_area.some(area => area.toLowerCase().includes(query))
+          c.coverage_area.toLowerCase().includes(query)
       );
       setFilteredCompanies(filtered);
     }
@@ -74,14 +76,18 @@ export default function DeliveryCompaniesPage() {
 
   const fetchCompanies = async () => {
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/delivery-companies`
-      );
-      const data = await response.json();
-      setCompanies(data);
-      setFilteredCompanies(data);
+      const data = await apiGet<DeliveryCompany[]>('/delivery-companies');
+      setCompanies(data || []);
+      setFilteredCompanies(data || []);
     } catch (error) {
-      console.error("Erreur chargement sociétés:", error);
+      console.error("Erreur chargement:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les sociétés de livraison",
+        variant: "destructive",
+      });
+      setCompanies([]);
+      setFilteredCompanies([]);
     } finally {
       setLoading(false);
     }
@@ -92,34 +98,35 @@ export default function DeliveryCompaniesPage() {
 
     const payload = {
       ...formData,
-      coverage_area: formData.coverage_area.split(",").map(s => s.trim()).filter(Boolean),
       whatsapp: formData.whatsapp || null,
       email: formData.email || null,
+      is_active: true,
     };
 
     try {
-      const url = editingId
-        ? `${process.env.NEXT_PUBLIC_API_URL}/delivery-companies/${editingId}`
-        : `${process.env.NEXT_PUBLIC_API_URL}/delivery-companies`;
-
-      const response = await fetch(url, {
-        method: editingId ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (response.ok) {
-        await fetchCompanies();
-        resetForm();
-        alert(
-          editingId
-            ? "Société modifiée avec succès!"
-            : "Société créée avec succès!"
-        );
+      if (editingId) {
+        await apiPatch(`/delivery-companies/${editingId}`, payload);
+        toast({
+          title: "Succès !",
+          description: "Société modifiée avec succès",
+        });
+      } else {
+        await apiPost('/delivery-companies', payload);
+        toast({
+          title: "Succès !",
+          description: "Société créée avec succès",
+        });
       }
+
+      await fetchCompanies();
+      resetForm();
     } catch (error) {
       console.error("Erreur sauvegarde:", error);
-      alert("Erreur lors de la sauvegarde");
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la sauvegarde",
+        variant: "destructive",
+      });
     }
   };
 
@@ -129,7 +136,7 @@ export default function DeliveryCompaniesPage() {
       phone: company.phone,
       whatsapp: company.whatsapp || "",
       email: company.email || "",
-      coverage_area: company.coverage_area.join(", "),
+      coverage_area: company.coverage_area,
       is_verified: company.is_verified,
     });
     setEditingId(company.id);
@@ -140,18 +147,19 @@ export default function DeliveryCompaniesPage() {
     if (!confirm("Êtes-vous sûr de vouloir supprimer cette société ?")) return;
 
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/delivery-companies/${id}`,
-        { method: "DELETE" }
-      );
-
-      if (response.ok) {
-        await fetchCompanies();
-        alert("Société supprimée!");
-      }
+      await apiDelete(`/delivery-companies/${id}`);
+      toast({
+        title: "Succès !",
+        description: "Société supprimée",
+      });
+      await fetchCompanies();
     } catch (error) {
       console.error("Erreur suppression:", error);
-      alert("Erreur lors de la suppression");
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la suppression",
+        variant: "destructive",
+      });
     }
   };
 
@@ -295,7 +303,7 @@ export default function DeliveryCompaniesPage() {
                   </div>
                   <div className="md:col-span-2">
                     <Label htmlFor="coverage_area">
-                      Zones de couverture (séparées par des virgules) *
+                      Zone de couverture *
                     </Label>
                     <Input
                       id="coverage_area"
@@ -362,7 +370,7 @@ export default function DeliveryCompaniesPage() {
               <TableRow>
                 <TableHead>Nom</TableHead>
                 <TableHead>Contact</TableHead>
-                <TableHead>Zones de couverture</TableHead>
+                <TableHead>Zone de couverture</TableHead>
                 <TableHead>Statut</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -400,17 +408,10 @@ export default function DeliveryCompaniesPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {company.coverage_area.map((area, idx) => (
-                          <span
-                            key={idx}
-                            className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700"
-                          >
-                            <MapPin className="w-3 h-3 inline mr-1" />
-                            {area}
-                          </span>
-                        ))}
-                      </div>
+                      <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">
+                        <MapPin className="w-3 h-3 inline mr-1" />
+                        {company.coverage_area}
+                      </span>
                     </TableCell>
                     <TableCell>
                       {company.is_verified ? (

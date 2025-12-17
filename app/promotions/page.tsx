@@ -25,7 +25,8 @@ import {
   TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
-import { format } from "date-fns";
+import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
+import { toast } from "@/lib/use-toast";
 
 interface Promotion {
   id: string;
@@ -79,14 +80,18 @@ export default function PromotionsPage() {
 
   const fetchPromotions = async () => {
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/promotions`
-      );
-      const data = await response.json();
-      setPromotions(data);
-      setFilteredPromotions(data);
+      const data = await apiGet<Promotion[]>('/promotions');
+      setPromotions(data || []);
+      setFilteredPromotions(data || []);
     } catch (error) {
-      console.error("Erreur chargement promotions:", error);
+      console.error("Erreur chargement:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les promotions",
+        variant: "destructive",
+      });
+      setPromotions([]);
+      setFilteredPromotions([]);
     } finally {
       setLoading(false);
     }
@@ -101,31 +106,33 @@ export default function PromotionsPage() {
       description: formData.description || null,
       code: formData.code || null,
       target_zone: formData.target_zone || null,
+      is_active: true,
     };
 
     try {
-      const url = editingId
-        ? `${process.env.NEXT_PUBLIC_API_URL}/promotions/${editingId}`
-        : `${process.env.NEXT_PUBLIC_API_URL}/promotions`;
-
-      const response = await fetch(url, {
-        method: editingId ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (response.ok) {
-        await fetchPromotions();
-        resetForm();
-        alert(
-          editingId
-            ? "Promotion modifiée avec succès!"
-            : "Promotion créée avec succès!"
-        );
+      if (editingId) {
+        await apiPatch(`/promotions/${editingId}`, payload);
+        toast({
+          title: "Succès !",
+          description: "Promotion modifiée avec succès",
+        });
+      } else {
+        await apiPost('/promotions', payload);
+        toast({
+          title: "Succès !",
+          description: "Promotion créée avec succès",
+        });
       }
+
+      await fetchPromotions();
+      resetForm();
     } catch (error) {
       console.error("Erreur sauvegarde:", error);
-      alert("Erreur lors de la sauvegarde");
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la sauvegarde",
+        variant: "destructive",
+      });
     }
   };
 
@@ -148,18 +155,19 @@ export default function PromotionsPage() {
       return;
 
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/promotions/${id}`,
-        { method: "DELETE" }
-      );
-
-      if (response.ok) {
-        await fetchPromotions();
-        alert("Promotion supprimée!");
-      }
+      await apiDelete(`/promotions/${id}`);
+      toast({
+        title: "Succès !",
+        description: "Promotion supprimée",
+      });
+      await fetchPromotions();
     } catch (error) {
       console.error("Erreur suppression:", error);
-      alert("Erreur lors de la suppression");
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la suppression",
+        variant: "destructive",
+      });
     }
   };
 
@@ -178,10 +186,24 @@ export default function PromotionsPage() {
   };
 
   const isActive = (promo: Promotion) => {
-    const now = new Date();
-    const start = new Date(promo.valid_from);
-    const end = new Date(promo.valid_to);
-    return promo.is_active && now >= start && now <= end;
+    try {
+      const now = new Date();
+      const start = new Date(promo.valid_from);
+      const end = new Date(promo.valid_to);
+      return promo.is_active && now >= start && now <= end;
+    } catch {
+      return false;
+    }
+  };
+
+  const formatDate = (dateString: string): string => {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "-";
+      return date.toLocaleDateString("fr-FR");
+    } catch {
+      return "-";
+    }
   };
 
   return (
@@ -292,9 +314,7 @@ export default function PromotionsPage() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="discount_value">
-                      Réduction (%) *
-                    </Label>
+                    <Label htmlFor="discount_value">Réduction (%) *</Label>
                     <Input
                       id="discount_value"
                       type="number"
@@ -445,10 +465,10 @@ export default function PromotionsPage() {
                     <TableCell className="text-sm">
                       <div className="flex items-center gap-1 text-gray-600">
                         <Calendar className="w-3 h-3" />
-                        {format(new Date(promo.valid_from), "dd/MM/yyyy")}
+                        {formatDate(promo.valid_from)}
                       </div>
                       <div className="flex items-center gap-1 text-gray-600">
-                        → {format(new Date(promo.valid_to), "dd/MM/yyyy")}
+                        → {formatDate(promo.valid_to)}
                       </div>
                     </TableCell>
                     <TableCell>
