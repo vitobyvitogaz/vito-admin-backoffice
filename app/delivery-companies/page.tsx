@@ -27,6 +27,7 @@ import {
 import Link from "next/link";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { toast } from "@/lib/use-toast";
+import { ZoneSelector } from "@/components/ZoneSelector";
 
 interface DeliveryCompany {
   id: string;
@@ -34,7 +35,7 @@ interface DeliveryCompany {
   phone: string;
   whatsapp: string | null;
   email: string | null;
-  coverage_area: string;
+  service_areas: string[];
   is_verified: boolean;
   is_active: boolean;
 }
@@ -52,7 +53,7 @@ export default function DeliveryCompaniesPage() {
     phone: "",
     whatsapp: "",
     email: "",
-    coverage_area: "",
+    service_areas: [] as string[],
     is_verified: false,
   });
 
@@ -68,7 +69,7 @@ export default function DeliveryCompaniesPage() {
       const filtered = companies.filter(
         (c) =>
           c.name.toLowerCase().includes(query) ||
-          c.coverage_area.toLowerCase().includes(query)
+          c.service_areas.some(area => area.toLowerCase().includes(query))
       );
       setFilteredCompanies(filtered);
     }
@@ -96,11 +97,25 @@ export default function DeliveryCompaniesPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (formData.service_areas.length === 0) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez sélectionner au moins une zone de service",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const payload = {
-      ...formData,
+      name: formData.name,
+      phone: formData.phone,
       whatsapp: formData.whatsapp || null,
       email: formData.email || null,
+      service_areas: formData.service_areas,
+      is_verified: formData.is_verified,
       is_active: true,
+      features: [],
+      specialties: [],
     };
 
     try {
@@ -136,7 +151,7 @@ export default function DeliveryCompaniesPage() {
       phone: company.phone,
       whatsapp: company.whatsapp || "",
       email: company.email || "",
-      coverage_area: company.coverage_area,
+      service_areas: company.service_areas || [],
       is_verified: company.is_verified,
     });
     setEditingId(company.id);
@@ -169,7 +184,7 @@ export default function DeliveryCompaniesPage() {
       phone: "",
       whatsapp: "",
       email: "",
-      coverage_area: "",
+      service_areas: [],
       is_verified: false,
     });
     setEditingId(null);
@@ -278,6 +293,7 @@ export default function DeliveryCompaniesPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, phone: e.target.value })
                       }
+                      placeholder="+261 32 00 000 00"
                     />
                   </div>
                   <div>
@@ -288,6 +304,7 @@ export default function DeliveryCompaniesPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, whatsapp: e.target.value })
                       }
+                      placeholder="+261 32 00 000 00"
                     />
                   </div>
                   <div>
@@ -299,25 +316,23 @@ export default function DeliveryCompaniesPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, email: e.target.value })
                       }
+                      placeholder="contact@entreprise.mg"
                     />
                   </div>
+                  
+                  {/* ZoneSelector Component */}
                   <div className="md:col-span-2">
-                    <Label htmlFor="coverage_area">
-                      Zone de couverture *
-                    </Label>
-                    <Input
-                      id="coverage_area"
-                      required
-                      placeholder="Ex: Antananarivo, Toamasina, Antsirabe"
-                      value={formData.coverage_area}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          coverage_area: e.target.value,
-                        })
+                    <ZoneSelector
+                      selectedZones={formData.service_areas}
+                      onChange={(zones) =>
+                        setFormData({ ...formData, service_areas: zones })
                       }
+                      label="Zones de service"
+                      required
+                      placeholder="Sélectionner les zones desservies..."
                     />
                   </div>
+
                   <div className="md:col-span-2">
                     <label className="flex items-center gap-2">
                       <input
@@ -370,7 +385,7 @@ export default function DeliveryCompaniesPage() {
               <TableRow>
                 <TableHead>Nom</TableHead>
                 <TableHead>Contact</TableHead>
-                <TableHead>Zone de couverture</TableHead>
+                <TableHead>Zones de service</TableHead>
                 <TableHead>Statut</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -408,10 +423,21 @@ export default function DeliveryCompaniesPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">
-                        <MapPin className="w-3 h-3 inline mr-1" />
-                        {company.coverage_area}
-                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {company.service_areas && company.service_areas.length > 0 ? (
+                          company.service_areas.map((area, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700"
+                            >
+                              <MapPin className="w-3 h-3 inline mr-1" />
+                              {area}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-gray-400 text-sm">-</span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       {company.is_verified ? (

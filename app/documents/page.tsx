@@ -34,7 +34,7 @@ interface Document {
   category: string;
   file_url: string;
   download_count: number;
-  available_offline: boolean;
+  is_offline: boolean;
   is_active: boolean;
 }
 
@@ -52,7 +52,7 @@ export default function DocumentsPage() {
     description: "",
     category: "PAMF",
     file_url: "",
-    available_offline: false,
+    is_offline: false,
   });
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -128,8 +128,11 @@ export default function DocumentsPage() {
     }
 
     const payload = {
-      ...formData,
+      title: formData.title,
       description: formData.description || null,
+      category: formData.category,
+      file_url: formData.file_url,
+      is_offline: formData.is_offline,
       is_active: true,
     };
 
@@ -166,7 +169,7 @@ export default function DocumentsPage() {
       description: doc.description || "",
       category: doc.category,
       file_url: doc.file_url,
-      available_offline: doc.available_offline,
+      is_offline: doc.is_offline,
     });
     setEditingId(doc.id);
     setShowForm(true);
@@ -198,7 +201,7 @@ export default function DocumentsPage() {
       description: "",
       category: "PAMF",
       file_url: "",
-      available_offline: false,
+      is_offline: false,
     });
     setSelectedFile(null);
     setEditingId(null);
@@ -306,6 +309,7 @@ export default function DocumentsPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, title: e.target.value })
                       }
+                      placeholder="Ex: Guide PAMF 2025"
                     />
                   </div>
                   <div>
@@ -335,6 +339,7 @@ export default function DocumentsPage() {
                           description: e.target.value,
                         })
                       }
+                      placeholder="Description du document"
                     />
                   </div>
                   <div className="md:col-span-2">
@@ -361,11 +366,11 @@ export default function DocumentsPage() {
                     <label className="flex items-center gap-2">
                       <input
                         type="checkbox"
-                        checked={formData.available_offline}
+                        checked={formData.is_offline}
                         onChange={(e) =>
                           setFormData({
                             ...formData,
-                            available_offline: e.target.checked,
+                            is_offline: e.target.checked,
                           })
                         }
                         className="w-4 h-4 text-blue-600"
@@ -447,11 +452,11 @@ export default function DocumentsPage() {
                     <TableCell>
                       <div className="flex items-center gap-1 text-sm">
                         <Download className="w-4 h-4 text-gray-400" />
-                        {doc.download_count}
+                        {doc.download_count || 0}
                       </div>
                     </TableCell>
                     <TableCell>
-                      {doc.available_offline ? (
+                      {doc.is_offline ? (
                         <span className="text-green-600 text-sm">✓</span>
                       ) : (
                         <span className="text-gray-400 text-sm">-</span>

@@ -27,17 +27,21 @@ import {
 import Link from "next/link";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { toast } from "@/lib/use-toast";
+import { ZoneSelector } from "@/components/ZoneSelector";
 
 interface Promotion {
   id: string;
   title: string;
-  description: string | null;
+  subtitle: string | null;
+  description: string;
   discount_value: number;
-  code: string | null;
+  discount_type: string;
+  promo_code: string | null;
   valid_from: string;
-  valid_to: string;
+  valid_until: string;
+  zones: string[];
+  applicable_products: string[];
   usage_count: number;
-  target_zone: string | null;
   is_active: boolean;
 }
 
@@ -51,12 +55,15 @@ export default function PromotionsPage() {
 
   const [formData, setFormData] = useState({
     title: "",
+    subtitle: "",
     description: "",
     discount_value: "",
-    code: "",
+    discount_type: "PERCENTAGE",
+    promo_code: "",
     valid_from: "",
-    valid_to: "",
-    target_zone: "",
+    valid_until: "",
+    zones: [] as string[],
+    applicable_products: ["Bouteille 12.5kg", "Bouteille 6kg"],
   });
 
   useEffect(() => {
@@ -71,8 +78,8 @@ export default function PromotionsPage() {
       const filtered = promotions.filter(
         (p) =>
           p.title.toLowerCase().includes(query) ||
-          (p.code && p.code.toLowerCase().includes(query)) ||
-          (p.target_zone && p.target_zone.toLowerCase().includes(query))
+          (p.promo_code && p.promo_code.toLowerCase().includes(query)) ||
+          p.zones.some(zone => zone.toLowerCase().includes(query))
       );
       setFilteredPromotions(filtered);
     }
@@ -100,13 +107,32 @@ export default function PromotionsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (formData.zones.length === 0) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez sélectionner au moins une zone",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Convertir les dates en format ISO
+    const validFromISO = formData.valid_from ? new Date(formData.valid_from + 'T00:00:00Z').toISOString() : undefined;
+    const validUntilISO = new Date(formData.valid_until + 'T23:59:59Z').toISOString();
+
     const payload = {
-      ...formData,
+      title: formData.title,
+      subtitle: formData.subtitle || null,
+      description: formData.description || "Promotion spéciale",
       discount_value: parseFloat(formData.discount_value),
-      description: formData.description || null,
-      code: formData.code || null,
-      target_zone: formData.target_zone || null,
+      discount_type: formData.discount_type,
+      promo_code: formData.promo_code || null,
+      valid_from: validFromISO,
+      valid_until: validUntilISO,
+      zones: formData.zones,
+      applicable_products: formData.applicable_products,
       is_active: true,
+      is_featured: false,
     };
 
     try {
@@ -139,12 +165,15 @@ export default function PromotionsPage() {
   const handleEdit = (promo: Promotion) => {
     setFormData({
       title: promo.title,
+      subtitle: promo.subtitle || "",
       description: promo.description || "",
       discount_value: promo.discount_value.toString(),
-      code: promo.code || "",
+      discount_type: promo.discount_type,
+      promo_code: promo.promo_code || "",
       valid_from: promo.valid_from.split("T")[0],
-      valid_to: promo.valid_to.split("T")[0],
-      target_zone: promo.target_zone || "",
+      valid_until: promo.valid_until.split("T")[0],
+      zones: promo.zones || [],
+      applicable_products: promo.applicable_products || ["Bouteille 12.5kg"],
     });
     setEditingId(promo.id);
     setShowForm(true);
@@ -174,12 +203,15 @@ export default function PromotionsPage() {
   const resetForm = () => {
     setFormData({
       title: "",
+      subtitle: "",
       description: "",
       discount_value: "",
-      code: "",
+      discount_type: "PERCENTAGE",
+      promo_code: "",
       valid_from: "",
-      valid_to: "",
-      target_zone: "",
+      valid_until: "",
+      zones: [],
+      applicable_products: ["Bouteille 12.5kg", "Bouteille 6kg"],
     });
     setEditingId(null);
     setShowForm(false);
@@ -189,7 +221,7 @@ export default function PromotionsPage() {
     try {
       const now = new Date();
       const start = new Date(promo.valid_from);
-      const end = new Date(promo.valid_to);
+      const end = new Date(promo.valid_until);
       return promo.is_active && now >= start && now <= end;
     } catch {
       return false;
@@ -298,8 +330,22 @@ export default function PromotionsPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, title: e.target.value })
                       }
+                      placeholder="Ex: Fety Masaka 2025"
                     />
                   </div>
+                  
+                  <div className="md:col-span-2">
+                    <Label htmlFor="subtitle">Sous-titre</Label>
+                    <Input
+                      id="subtitle"
+                      value={formData.subtitle}
+                      onChange={(e) =>
+                        setFormData({ ...formData, subtitle: e.target.value })
+                      }
+                      placeholder="Ex: Promotion de fin d'année"
+                    />
+                  </div>
+
                   <div className="md:col-span-2">
                     <Label htmlFor="description">Description</Label>
                     <Input
@@ -311,15 +357,35 @@ export default function PromotionsPage() {
                           description: e.target.value,
                         })
                       }
+                      placeholder="Détails de la promotion"
                     />
                   </div>
+
                   <div>
-                    <Label htmlFor="discount_value">Réduction (%) *</Label>
+                    <Label htmlFor="discount_type">Type de réduction *</Label>
+                    <select
+                      id="discount_type"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={formData.discount_type}
+                      onChange={(e) =>
+                        setFormData({ ...formData, discount_type: e.target.value })
+                      }
+                    >
+                      <option value="PERCENTAGE">Pourcentage (%)</option>
+                      <option value="FIXED_AMOUNT">Montant fixe (Ar)</option>
+                      <option value="FREE_DELIVERY">Livraison gratuite</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="discount_value">
+                      Valeur de réduction *
+                    </Label>
                     <Input
                       id="discount_value"
                       type="number"
                       min="0"
-                      max="100"
+                      max={formData.discount_type === "PERCENTAGE" ? "100" : undefined}
                       step="0.01"
                       required
                       value={formData.discount_value}
@@ -329,28 +395,30 @@ export default function PromotionsPage() {
                           discount_value: e.target.value,
                         })
                       }
+                      placeholder={formData.discount_type === "PERCENTAGE" ? "Ex: 30" : "Ex: 5000"}
                     />
                   </div>
+
                   <div>
-                    <Label htmlFor="code">Code Promo</Label>
+                    <Label htmlFor="promo_code">Code Promo</Label>
                     <Input
-                      id="code"
+                      id="promo_code"
                       placeholder="Ex: FETY2025"
-                      value={formData.code}
+                      value={formData.promo_code}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          code: e.target.value.toUpperCase(),
+                          promo_code: e.target.value.toUpperCase(),
                         })
                       }
                     />
                   </div>
+
                   <div>
-                    <Label htmlFor="valid_from">Date de début *</Label>
+                    <Label htmlFor="valid_from">Date de début</Label>
                     <Input
                       id="valid_from"
                       type="date"
-                      required
                       value={formData.valid_from}
                       onChange={(e) =>
                         setFormData({
@@ -360,30 +428,30 @@ export default function PromotionsPage() {
                       }
                     />
                   </div>
+
                   <div>
-                    <Label htmlFor="valid_to">Date de fin *</Label>
+                    <Label htmlFor="valid_until">Date de fin *</Label>
                     <Input
-                      id="valid_to"
+                      id="valid_until"
                       type="date"
                       required
-                      value={formData.valid_to}
+                      value={formData.valid_until}
                       onChange={(e) =>
-                        setFormData({ ...formData, valid_to: e.target.value })
+                        setFormData({ ...formData, valid_until: e.target.value })
                       }
                     />
                   </div>
+
+                  {/* ZoneSelector Component */}
                   <div className="md:col-span-2">
-                    <Label htmlFor="target_zone">Zone ciblée</Label>
-                    <Input
-                      id="target_zone"
-                      placeholder="Ex: Antananarivo, Toamasina..."
-                      value={formData.target_zone}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          target_zone: e.target.value,
-                        })
+                    <ZoneSelector
+                      selectedZones={formData.zones}
+                      onChange={(zones) =>
+                        setFormData({ ...formData, zones })
                       }
+                      label="Zones concernées"
+                      required
+                      placeholder="Sélectionner les zones..."
                     />
                   </div>
                 </div>
@@ -422,7 +490,7 @@ export default function PromotionsPage() {
                 <TableHead>Réduction</TableHead>
                 <TableHead>Code</TableHead>
                 <TableHead>Validité</TableHead>
-                <TableHead>Zone</TableHead>
+                <TableHead>Zones</TableHead>
                 <TableHead>Utilisations</TableHead>
                 <TableHead>Statut</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -450,13 +518,15 @@ export default function PromotionsPage() {
                     <TableCell>
                       <div className="flex items-center gap-1 text-green-600 font-semibold">
                         <Percent className="w-4 h-4" />
-                        {promo.discount_value}%
+                        {promo.discount_type === "PERCENTAGE" 
+                          ? `${promo.discount_value}%`
+                          : `${promo.discount_value} Ar`}
                       </div>
                     </TableCell>
                     <TableCell>
-                      {promo.code ? (
+                      {promo.promo_code ? (
                         <code className="px-2 py-1 bg-gray-100 rounded text-sm font-mono">
-                          {promo.code}
+                          {promo.promo_code}
                         </code>
                       ) : (
                         <span className="text-gray-400">-</span>
@@ -468,25 +538,37 @@ export default function PromotionsPage() {
                         {formatDate(promo.valid_from)}
                       </div>
                       <div className="flex items-center gap-1 text-gray-600">
-                        → {formatDate(promo.valid_to)}
+                        → {formatDate(promo.valid_until)}
                       </div>
                     </TableCell>
                     <TableCell>
-                      {promo.target_zone ? (
-                        <div className="flex items-center gap-1 text-sm">
-                          <MapPin className="w-3 h-3 text-gray-400" />
-                          {promo.target_zone}
-                        </div>
-                      ) : (
-                        <span className="text-gray-400 text-sm">
-                          Toutes zones
-                        </span>
-                      )}
+                      <div className="flex flex-wrap gap-1">
+                        {promo.zones && promo.zones.length > 0 ? (
+                          promo.zones.slice(0, 2).map((zone, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2 py-1 text-xs rounded-full bg-orange-100 text-orange-700"
+                            >
+                              <MapPin className="w-3 h-3 inline mr-1" />
+                              {zone}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-gray-400 text-sm">
+                            Toutes zones
+                          </span>
+                        )}
+                        {promo.zones && promo.zones.length > 2 && (
+                          <span className="text-xs text-gray-500">
+                            +{promo.zones.length - 2}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
                         <TrendingUp className="w-4 h-4 text-blue-500" />
-                        {promo.usage_count}
+                        {promo.usage_count || 0}
                       </div>
                     </TableCell>
                     <TableCell>

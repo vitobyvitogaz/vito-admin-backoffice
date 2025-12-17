@@ -72,7 +72,6 @@ export default function ZonesPage() {
   const fetchZones = async () => {
     try {
       const data = await apiGet<Zone[]>('/zones');
-      // Inclure aussi les zones inactives pour l'admin
       const allZones = data || [];
       setZones(allZones);
       setFilteredZones(allZones);
@@ -189,7 +188,6 @@ export default function ZonesPage() {
     setShowForm(false);
   };
 
-  // Grouper par province
   const groupedZones = filteredZones.reduce((acc, zone) => {
     if (!acc[zone.province]) {
       acc[zone.province] = [];
@@ -293,7 +291,7 @@ export default function ZonesPage() {
                       id="name"
                       required
                       value={formData.name}
-                      onChange={(e) =>
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                         setFormData({ ...formData, name: e.target.value })
                       }
                       placeholder="Ex: Antananarivo"
@@ -305,7 +303,7 @@ export default function ZonesPage() {
                       id="province"
                       required
                       value={formData.province}
-                      onChange={(e) =>
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                         setFormData({ ...formData, province: e.target.value })
                       }
                       placeholder="Ex: Antananarivo"
@@ -318,7 +316,7 @@ export default function ZonesPage() {
                       required
                       maxLength={10}
                       value={formData.code}
-                      onChange={(e) =>
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                         setFormData({
                           ...formData,
                           code: e.target.value.toUpperCase(),
@@ -332,7 +330,7 @@ export default function ZonesPage() {
                       <input
                         type="checkbox"
                         checked={formData.is_active}
-                        onChange={(e) =>
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                           setFormData({
                             ...formData,
                             is_active: e.target.checked,
@@ -365,7 +363,7 @@ export default function ZonesPage() {
                 placeholder="Rechercher par nom, province ou code..."
                 className="pl-10"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
               />
             </div>
           </CardContent>
@@ -398,8 +396,8 @@ export default function ZonesPage() {
               ) : (
                 <>
                   {Object.entries(groupedZones).map(([province, provinceZones]) => (
-                    <>
-                      <TableRow key={`header-${province}`} className="bg-gray-50">
+                    <tbody key={province}>
+                      <TableRow className="bg-gray-50">
                         <TableCell colSpan={5} className="font-semibold text-gray-700">
                           {province}
                         </TableCell>
@@ -458,7 +456,7 @@ export default function ZonesPage() {
                           </TableCell>
                         </TableRow>
                       ))}
-                    </>
+                    </tbody>
                   ))}
                 </>
               )}
