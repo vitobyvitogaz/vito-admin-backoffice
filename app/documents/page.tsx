@@ -50,7 +50,7 @@ export default function DocumentsPage() {
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    category: "PAMF",
+    category: "pamf",
     file_url: "",
     is_offline: false,
   });
@@ -325,7 +325,6 @@ export default function DocumentsPage() {
                       <option value="PAMF">PAMF</option>
                       <option value="SECURITY">Sécurité</option>
                       <option value="GUIDE">Guide</option>
-                      <option value="MANUAL">Manuel</option>
                     </select>
                   </div>
                   <div className="md:col-span-2">
