@@ -21,9 +21,10 @@ import {
   Search,
   MapPin,
   Phone,
-  Mail,
 } from "lucide-react";
 import Link from "next/link";
+import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
+import { toast } from "@/lib/use-toast";
 
 interface Reseller {
   id: string;
@@ -35,7 +36,6 @@ interface Reseller {
   type: string;
   phone: string;
   whatsapp: string | null;
-  email: string | null;
   is_active: boolean;
 }
 
@@ -53,10 +53,9 @@ export default function ResellersPage() {
     city: "",
     latitude: "",
     longitude: "",
-    type: "AUTHORIZED",
+    type: "Station Service",
     phone: "",
     whatsapp: "",
-    email: "",
   });
 
   useEffect(() => {
@@ -80,14 +79,16 @@ export default function ResellersPage() {
 
   const fetchResellers = async () => {
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/resellers`
-      );
-      const data = await response.json();
+      const data = await apiGet<Reseller[]>('/resellers');
       setResellers(data);
       setFilteredResellers(data);
     } catch (error) {
       console.error("Erreur chargement revendeurs:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les revendeurs",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -101,32 +102,35 @@ export default function ResellersPage() {
       latitude: parseFloat(formData.latitude),
       longitude: parseFloat(formData.longitude),
       whatsapp: formData.whatsapp || null,
-      email: formData.email || null,
+      services: {},
+      is_active: true,
+      is_verified: true,
     };
 
     try {
-      const url = editingId
-        ? `${process.env.NEXT_PUBLIC_API_URL}/resellers/${editingId}`
-        : `${process.env.NEXT_PUBLIC_API_URL}/resellers`;
-
-      const response = await fetch(url, {
-        method: editingId ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (response.ok) {
-        await fetchResellers();
-        resetForm();
-        alert(
-          editingId
-            ? "Revendeur modifié avec succès!"
-            : "Revendeur créé avec succès!"
-        );
+      if (editingId) {
+        await apiPatch(`/resellers/${editingId}`, payload);
+        toast({
+          title: "Succès !",
+          description: "Revendeur modifié avec succès",
+        });
+      } else {
+        await apiPost('/resellers', payload);
+        toast({
+          title: "Succès !",
+          description: "Revendeur créé avec succès",
+        });
       }
+      
+      await fetchResellers();
+      resetForm();
     } catch (error) {
       console.error("Erreur sauvegarde:", error);
-      alert("Erreur lors de la sauvegarde");
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la sauvegarde",
+        variant: "destructive",
+      });
     }
   };
 
@@ -140,7 +144,6 @@ export default function ResellersPage() {
       type: reseller.type,
       phone: reseller.phone,
       whatsapp: reseller.whatsapp || "",
-      email: reseller.email || "",
     });
     setEditingId(reseller.id);
     setShowForm(true);
@@ -150,18 +153,19 @@ export default function ResellersPage() {
     if (!confirm("Êtes-vous sûr de vouloir supprimer ce revendeur ?")) return;
 
     try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/resellers/${id}`,
-        { method: "DELETE" }
-      );
-
-      if (response.ok) {
-        await fetchResellers();
-        alert("Revendeur supprimé!");
-      }
+      await apiDelete(`/resellers/${id}`);
+      toast({
+        title: "Succès !",
+        description: "Revendeur supprimé",
+      });
+      await fetchResellers();
     } catch (error) {
       console.error("Erreur suppression:", error);
-      alert("Erreur lors de la suppression");
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la suppression",
+        variant: "destructive",
+      });
     }
   };
 
@@ -172,10 +176,9 @@ export default function ResellersPage() {
       city: "",
       latitude: "",
       longitude: "",
-      type: "AUTHORIZED",
+      type: "Station Service",
       phone: "",
       whatsapp: "",
-      email: "",
     });
     setEditingId(null);
     setShowForm(false);
@@ -312,6 +315,7 @@ export default function ResellersPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, latitude: e.target.value })
                       }
+                      placeholder="-18.8792"
                     />
                   </div>
                   <div>
@@ -328,6 +332,7 @@ export default function ResellersPage() {
                           longitude: e.target.value,
                         })
                       }
+                      placeholder="47.5079"
                     />
                   </div>
                   <div>
@@ -340,9 +345,10 @@ export default function ResellersPage() {
                         setFormData({ ...formData, type: e.target.value })
                       }
                     >
-                      <option value="EXCLUSIVE">Exclusif</option>
-                      <option value="AUTHORIZED">Autorisé</option>
-                      <option value="DISTRIBUTOR">Distributeur</option>
+                      <option value="Station Service">Station Service</option>
+                      <option value="Épicerie">Épicerie</option>
+                      <option value="Quincaillerie">Quincaillerie</option>
+                      <option value="Autres">Autres</option>
                     </select>
                   </div>
                   <div>
@@ -354,6 +360,7 @@ export default function ResellersPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, phone: e.target.value })
                       }
+                      placeholder="+261 32 00 00 001"
                     />
                   </div>
                   <div>
@@ -364,17 +371,7 @@ export default function ResellersPage() {
                       onChange={(e) =>
                         setFormData({ ...formData, whatsapp: e.target.value })
                       }
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) =>
-                        setFormData({ ...formData, email: e.target.value })
-                      }
+                      placeholder="+261 32 00 00 001"
                     />
                   </div>
                 </div>
