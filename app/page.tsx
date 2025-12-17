@@ -9,6 +9,7 @@ import {
   FileText,
   Tag,
   Users,
+  MapPin,
   TrendingUp,
   BarChart3,
   Activity,
@@ -270,6 +271,18 @@ export default function DashboardPage() {
                 </div>
               </Link>
               <Link
+                href="/zones"
+                className="block p-4 bg-cyan-50 rounded-lg hover:bg-cyan-100 transition-colors"
+              >
+                <div className="flex items-center gap-2 font-semibold text-cyan-900">
+                  <MapPin className="w-4 h-4" />
+                  Gérer les Zones
+                </div>
+                <div className="text-sm text-cyan-700 mt-1">
+                  Villes et provinces de Madagascar
+                </div>
+              </Link>
+              <Link
                 href="/users"
                 className="block p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors"
               >
@@ -306,16 +319,16 @@ export default function DashboardPage() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Endpoints REST</span>
-                <span className="text-sm font-semibold">38 actifs</span>
+                <span className="text-sm font-semibold">42 actifs</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">RLS Policies</span>
-                <span className="text-sm font-semibold">28 sécurisées</span>
+                <span className="text-sm font-semibold">32 sécurisées</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Modules CRUD</span>
                 <span className="text-sm font-semibold text-green-600">
-                  ✅ 5/5 complets
+                  ✅ 6/6 complets
                 </span>
               </div>
               <div className="flex items-center justify-between">
