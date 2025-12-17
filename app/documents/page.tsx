@@ -50,7 +50,7 @@ export default function DocumentsPage() {
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    category: "pamf",
+    category: "pamf",  // ✅ minuscule
     file_url: "",
     is_offline: false,
   });
@@ -108,8 +108,6 @@ export default function DocumentsPage() {
       }
       setSelectedFile(file);
       
-      // Pour l'instant, on utilise une URL fictive
-      // Dans une vraie implémentation, on uploadera vers Supabase Storage
       const fakeUrl = `https://lqkqasuotgrlqwokquhy.supabase.co/storage/v1/object/public/documents/${file.name}`;
       setFormData({ ...formData, file_url: fakeUrl });
     }
@@ -130,7 +128,7 @@ export default function DocumentsPage() {
     const payload = {
       title: formData.title,
       description: formData.description || null,
-      category: formData.category,
+      category: formData.category,  // ✅ déjà en minuscules
       file_url: formData.file_url,
       is_offline: formData.is_offline,
       is_active: true,
@@ -199,7 +197,7 @@ export default function DocumentsPage() {
     setFormData({
       title: "",
       description: "",
-      category: "PAMF",
+      category: "pamf",  // ✅ minuscule
       file_url: "",
       is_offline: false,
     });
@@ -210,12 +208,20 @@ export default function DocumentsPage() {
 
   const getCategoryColor = (category: string) => {
     const colors: Record<string, string> = {
-      PAMF: "bg-purple-100 text-purple-700",
-      SECURITY: "bg-red-100 text-red-700",
-      GUIDE: "bg-blue-100 text-blue-700",
-      MANUAL: "bg-green-100 text-green-700",
+      pamf: "bg-purple-100 text-purple-700",
+      security: "bg-red-100 text-red-700",
+      guides: "bg-blue-100 text-blue-700",
     };
     return colors[category] || "bg-gray-100 text-gray-700";
+  };
+
+  const getCategoryLabel = (category: string) => {
+    const labels: Record<string, string> = {
+      pamf: "PAMF",
+      security: "Sécurité",
+      guides: "Guides",
+    };
+    return labels[category] || category;
   };
 
   return (
@@ -322,9 +328,9 @@ export default function DocumentsPage() {
                         setFormData({ ...formData, category: e.target.value })
                       }
                     >
-                      <option value="PAMF">PAMF</option>
-                      <option value="SECURITY">Sécurité</option>
-                      <option value="GUIDE">Guide</option>
+                      <option value="pamf">PAMF</option>
+                      <option value="security">Sécurité</option>
+                      <option value="guides">Guides</option>
                     </select>
                   </div>
                   <div className="md:col-span-2">
@@ -442,7 +448,7 @@ export default function DocumentsPage() {
                           doc.category
                         )}`}
                       >
-                        {doc.category}
+                        {getCategoryLabel(doc.category)}
                       </span>
                     </TableCell>
                     <TableCell className="text-sm text-gray-600 max-w-xs truncate">
