@@ -95,7 +95,7 @@ export default function DocumentsPage() {
     }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  /*const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.type !== "application/pdf") {
@@ -110,6 +110,58 @@ export default function DocumentsPage() {
       
       const fakeUrl = `https://lqkqasuotgrlqwokquhy.supabase.co/storage/v1/object/public/documents/${file.name}`;
       setFormData({ ...formData, file_url: fakeUrl });
+    }
+  };*/
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.type !== "application/pdf") {
+        toast({
+          title: "Erreur",
+          description: "Seuls les fichiers PDF sont acceptés",
+          variant: "destructive",
+        });
+        return;
+      }
+      setSelectedFile(file);
+      setUploading(true);
+
+      try {
+        // Créer FormData pour l'upload
+        const formDataUpload = new FormData();
+        formDataUpload.append('file', file);
+
+        // Upload vers le backend
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/documents/upload`, {
+          method: 'POST',
+          body: formDataUpload,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Erreur lors de l\'upload');
+        }
+
+        const { file_url, file_size } = await response.json();
+        
+        setFormData({ ...formData, file_url });
+        
+        toast({
+          title: "Succès !",
+          description: "Fichier uploadé avec succès",
+        });
+      } catch (error: any) {
+        console.error("Erreur upload:", error);
+        toast({
+          title: "Erreur",
+          description: error.message || "Impossible d'uploader le fichier",
+          variant: "destructive",
+        });
+        setSelectedFile(null);
+      } finally {
+        setUploading(false);
+      }
     }
   };
 
