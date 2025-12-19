@@ -158,7 +158,7 @@ export default function PromotionsPage() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`${API_URL}/documents/upload`, {
+      const response = await fetch(`${API_URL}/promotions/upload-image`, {
         method: 'POST',
         body: formData,
       });
