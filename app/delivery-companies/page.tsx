@@ -25,12 +25,13 @@ import {
   CheckCircle,
   XCircle,
   Star,
+  X,
+  Image as ImageIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "@/lib/use-toast";
 import { ZoneSelector } from "@/components/ZoneSelector";
 
-// API URL depuis env
 const API_URL = 'https://vito-backend-supabase.onrender.com/api/v1';
 
 interface DeliveryCompany {
@@ -64,6 +65,7 @@ export default function DeliveryCompaniesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -86,7 +88,6 @@ export default function DeliveryCompaniesPage() {
     display_order: 0,
   });
 
-  // États pour les inputs de tags
   const [featureInput, setFeatureInput] = useState("");
   const [specialtyInput, setSpecialtyInput] = useState("");
 
@@ -130,6 +131,67 @@ export default function DeliveryCompaniesPage() {
       setFilteredCompanies([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez sélectionner une image (JPG, PNG, etc.)",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Erreur",
+        description: "L'image ne doit pas dépasser 5 MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setUploading(true);
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`${API_URL}/delivery-companies/upload-logo`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Erreur upload');
+      }
+
+      const data = await response.json();
+
+      setFormData(prev => ({
+        ...prev,
+        logo_url: data.file_url
+      }));
+
+      toast({
+        title: "Succès !",
+        description: "Logo uploadé avec succès",
+      });
+
+    } catch (error) {
+      console.error("Erreur upload:", error);
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de l'upload du logo",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -396,7 +458,7 @@ export default function DeliveryCompaniesPage() {
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* SECTION 1: INFORMATIONS GÉNÉRALES */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Informations générales</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Informations générales</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="name">Nom de la société *</Label>
@@ -408,16 +470,46 @@ export default function DeliveryCompaniesPage() {
                         placeholder="Ex: Livraison Express"
                       />
                     </div>
-                    <div>
-                      <Label htmlFor="logo_url">URL du Logo</Label>
-                      <Input
-                        id="logo_url"
-                        type="url"
-                        value={formData.logo_url}
-                        onChange={(e) => setFormData({ ...formData, logo_url: e.target.value })}
-                        placeholder="https://..."
-                      />
+
+                    <div className="md:col-span-2">
+                      <Label htmlFor="logo">Logo de la société</Label>
+                      <div className="mt-2">
+                        {formData.logo_url ? (
+                          <div className="space-y-2">
+                            <div className="relative w-full h-48 border-2 border-gray-200 rounded-lg overflow-hidden bg-white">
+                              <img
+                                src={formData.logo_url}
+                                alt="Preview"
+                                className="w-full h-full object-contain p-4"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setFormData(prev => ({ ...prev, logo_url: "" }))}
+                                className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full hover:bg-red-600"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                            <p className="text-xs text-gray-500">Cliquez sur X pour changer le logo</p>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id="logo"
+                              type="file"
+                              accept="image/*"
+                              onChange={handleLogoUpload}
+                              disabled={uploading}
+                              className="flex-1"
+                            />
+                            {uploading && (
+                              <span className="text-sm text-gray-500">Upload...</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
+
                     <div className="md:col-span-2">
                       <Label htmlFor="description">Description</Label>
                       <Textarea
@@ -433,7 +525,7 @@ export default function DeliveryCompaniesPage() {
 
                 {/* SECTION 2: CONTACT */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Contact</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Contact</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="phone">Téléphone *</Label>
@@ -488,7 +580,7 @@ export default function DeliveryCompaniesPage() {
 
                 {/* SECTION 3: SERVICE */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Détails du service</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Détails du service</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="delivery_time">Délai de livraison</Label>
@@ -531,7 +623,7 @@ export default function DeliveryCompaniesPage() {
 
                 {/* SECTION 4: ZONES DE SERVICE */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Zones de service *</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Zones de service *</h3>
                   <ZoneSelector
                     selectedZones={formData.service_areas}
                     onChange={(zones) => setFormData({ ...formData, service_areas: zones })}
@@ -543,9 +635,8 @@ export default function DeliveryCompaniesPage() {
 
                 {/* SECTION 5: CARACTÉRISTIQUES */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Caractéristiques</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Caractéristiques</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Features */}
                     <div>
                       <Label htmlFor="features">Fonctionnalités</Label>
                       <div className="flex gap-2 mb-2">
@@ -579,7 +670,6 @@ export default function DeliveryCompaniesPage() {
                       </div>
                     </div>
 
-                    {/* Specialties */}
                     <div>
                       <Label htmlFor="specialties">Spécialités</Label>
                       <div className="flex gap-2 mb-2">
@@ -617,7 +707,7 @@ export default function DeliveryCompaniesPage() {
 
                 {/* SECTION 6: PARAMÈTRES */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Paramètres</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Paramètres</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <Label htmlFor="display_order">Ordre d'affichage</Label>
@@ -683,6 +773,7 @@ export default function DeliveryCompaniesPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Logo</TableHead>
                 <TableHead>Nom</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead>Zones</TableHead>
@@ -695,19 +786,32 @@ export default function DeliveryCompaniesPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
+                  <TableCell colSpan={8} className="text-center py-8">
                     Chargement...
                   </TableCell>
                 </TableRow>
               ) : filteredCompanies.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
+                  <TableCell colSpan={8} className="text-center py-8">
                     Aucune société trouvée
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredCompanies.map((company) => (
                   <TableRow key={company.id}>
+                    <TableCell>
+                      {company.logo_url ? (
+                        <img
+                          src={company.logo_url}
+                          alt={company.name}
+                          className="w-16 h-16 object-contain rounded-lg bg-white p-1 border"
+                        />
+                      ) : (
+                        <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center">
+                          <ImageIcon className="w-6 h-6 text-gray-400" />
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell className="font-medium">
                       <div className="flex flex-col">
                         <span>{company.name}</span>
