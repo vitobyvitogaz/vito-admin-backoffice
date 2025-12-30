@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Settings, Image as ImageIcon, X, Upload } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Settings, Image as ImageIcon, X, Upload, Save } from "lucide-react";
 import Link from "next/link";
 import { toast } from "@/lib/use-toast";
 import Image from "next/image";
@@ -22,10 +23,26 @@ interface AppSetting {
 }
 
 export default function SettingsPage() {
+  // Bannière
   const [heroBannerUrl, setHeroBannerUrl] = useState<string>("");
-  const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string>("");
+  const [uploading, setUploading] = useState(false);
+  
+  // Textes
+  const [heroTitle, setHeroTitle] = useState<string>("");
+  const [heroSubtitle, setHeroSubtitle] = useState<string>("");
+  const [heroDescription, setHeroDescription] = useState<string>("");
+  
+  // Stats
+  const [stat1Value, setStat1Value] = useState<string>("");
+  const [stat1Label, setStat1Label] = useState<string>("");
+  const [stat2Value, setStat2Value] = useState<string>("");
+  const [stat2Label, setStat2Label] = useState<string>("");
+  const [stat3Value, setStat3Value] = useState<string>("");
+  const [stat3Label, setStat3Label] = useState<string>("");
+  
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     fetchSettings();
@@ -33,20 +50,56 @@ export default function SettingsPage() {
 
   const fetchSettings = async () => {
     try {
-      const response = await fetch(`${API_URL}/settings/hero_banner_url`);
+      const response = await fetch(`${API_URL}/settings`);
       
       if (!response.ok) {
         throw new Error('Erreur lors du chargement');
       }
       
-      const data: AppSetting = await response.json();
-      setHeroBannerUrl(data.setting_value);
-      setPreviewUrl(data.setting_value);
+      const data: AppSetting[] = await response.json();
+      
+      // Mapper les settings
+      data.forEach(setting => {
+        switch(setting.setting_key) {
+          case 'hero_banner_url':
+            setHeroBannerUrl(setting.setting_value);
+            setPreviewUrl(setting.setting_value);
+            break;
+          case 'hero_title':
+            setHeroTitle(setting.setting_value);
+            break;
+          case 'hero_subtitle':
+            setHeroSubtitle(setting.setting_value);
+            break;
+          case 'hero_description':
+            setHeroDescription(setting.setting_value);
+            break;
+          case 'stat_1_value':
+            setStat1Value(setting.setting_value);
+            break;
+          case 'stat_1_label':
+            setStat1Label(setting.setting_value);
+            break;
+          case 'stat_2_value':
+            setStat2Value(setting.setting_value);
+            break;
+          case 'stat_2_label':
+            setStat2Label(setting.setting_value);
+            break;
+          case 'stat_3_value':
+            setStat3Value(setting.setting_value);
+            break;
+          case 'stat_3_label':
+            setStat3Label(setting.setting_value);
+            break;
+        }
+      });
+      
     } catch (error) {
       console.error("Erreur chargement:", error);
       toast({
         title: "Erreur",
-        description: "Impossible de charger la bannière actuelle",
+        description: "Impossible de charger les paramètres",
         variant: "destructive",
       });
     } finally {
@@ -58,7 +111,6 @@ export default function SettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validation type
     if (!file.type.startsWith('image/')) {
       toast({
         title: "Erreur",
@@ -68,7 +120,6 @@ export default function SettingsPage() {
       return;
     }
 
-    // Validation taille
     if (file.size > 5 * 1024 * 1024) {
       toast({
         title: "Erreur",
@@ -103,7 +154,6 @@ export default function SettingsPage() {
         description: "Bannière uploadée et mise à jour avec succès",
       });
 
-      // Rafraîchir les settings
       await fetchSettings();
 
     } catch (error) {
@@ -115,6 +165,92 @@ export default function SettingsPage() {
       });
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleSaveTexts = async () => {
+    try {
+      setSaving(true);
+
+      // Mettre à jour tous les textes
+      const updates = [
+        { key: 'hero_title', value: heroTitle },
+        { key: 'hero_subtitle', value: heroSubtitle },
+        { key: 'hero_description', value: heroDescription },
+      ];
+
+      for (const update of updates) {
+        const response = await fetch(`${API_URL}/settings/key/${update.key}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ setting_value: update.value }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Erreur mise à jour ${update.key}`);
+        }
+      }
+
+      toast({
+        title: "Succès !",
+        description: "Textes mis à jour avec succès",
+      });
+
+    } catch (error) {
+      console.error("Erreur sauvegarde textes:", error);
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la sauvegarde des textes",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveStats = async () => {
+    try {
+      setSaving(true);
+
+      const updates = [
+        { key: 'stat_1_value', value: stat1Value },
+        { key: 'stat_1_label', value: stat1Label },
+        { key: 'stat_2_value', value: stat2Value },
+        { key: 'stat_2_label', value: stat2Label },
+        { key: 'stat_3_value', value: stat3Value },
+        { key: 'stat_3_label', value: stat3Label },
+      ];
+
+      for (const update of updates) {
+        const response = await fetch(`${API_URL}/settings/key/${update.key}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ setting_value: update.value }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Erreur mise à jour ${update.key}`);
+        }
+      }
+
+      toast({
+        title: "Succès !",
+        description: "Statistiques mises à jour avec succès",
+      });
+
+    } catch (error) {
+      console.error("Erreur sauvegarde stats:", error);
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la sauvegarde des statistiques",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -184,148 +320,227 @@ export default function SettingsPage() {
         </div>
       </nav>
 
-      <main className="p-6">
-        <div className="flex items-center gap-3 mb-6">
+      <main className="p-6 space-y-6">
+        <div className="flex items-center gap-3">
           <Settings className="w-8 h-8 text-blue-600" />
           <div>
-            <h2 className="text-2xl font-bold">Paramètres de l'application</h2>
+            <h2 className="text-2xl font-bold">Contenu de la page d'accueil</h2>
             <p className="text-sm text-gray-500">
-              Gérer la bannière de la page d'accueil
+              Gérer la bannière, les textes et les statistiques
             </p>
           </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Bannière de la page d'accueil</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="text-center py-8">
-                Chargement...
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {/* SECTION 1: APERÇU ACTUEL */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">
-                    Aperçu de la bannière actuelle
-                  </h3>
-                  
-                  {previewUrl ? (
-                    <div className="space-y-2">
-                      <div className="relative w-full h-64 md:h-96 border-2 border-gray-200 rounded-xl overflow-hidden bg-gray-100">
-                        <Image
-                          src={previewUrl}
-                          alt="Bannière hero actuelle"
-                          fill
-                          className="object-cover"
-                          priority
-                        />
-                        <button
-                          type="button"
-                          onClick={handleRemovePreview}
-                          className="absolute top-4 right-4 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 shadow-lg"
-                          title="Supprimer et changer la bannière"
-                        >
-                          <X className="w-5 h-5" />
-                        </button>
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        📌 Cette bannière est actuellement affichée sur la page d'accueil du PWA
-                      </p>
-                      <p className="text-xs text-blue-600">
-                        💡 Cliquez sur X pour changer la bannière
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="w-full h-64 md:h-96 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center bg-gray-50">
-                      <ImageIcon className="w-16 h-16 text-gray-400 mb-4" />
-                      <p className="text-gray-500 text-sm">Aucune bannière configurée</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* SECTION 2: UPLOAD NOUVELLE BANNIÈRE */}
-                {!previewUrl && (
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">
-                      Uploader une nouvelle bannière
-                    </h3>
-                    
-                    <div>
-                      <Label htmlFor="banner">
-                        Sélectionner une image (JPG, PNG, WebP)
-                      </Label>
-                      <div className="mt-2">
-                        <div className="flex items-center gap-2">
-                          <Input
-                            id="banner"
-                            type="file"
-                            accept="image/*"
-                            onChange={handleBannerUpload}
-                            disabled={uploading}
-                            className="flex-1"
-                          />
-                          {uploading && (
-                            <span className="text-sm text-gray-500 flex items-center gap-2">
-                              <Upload className="w-4 h-4 animate-pulse" />
-                              Upload en cours...
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-2">
-                          ℹ️ Recommandations : Format paysage (16:9), taille maximale 5 MB, résolution 1920x1080px ou plus
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* SECTION 3: INFORMATIONS */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <h4 className="font-semibold text-blue-900 mb-2">
-                    ℹ️ Informations importantes
-                  </h4>
-                  <ul className="text-sm text-blue-800 space-y-1">
-                    <li>• La bannière s'affiche sur la page d'accueil du PWA Vito</li>
-                    <li>• Le changement est visible immédiatement après l'upload</li>
-                    <li>• Format recommandé : 1920x1080px (16:9)</li>
-                    <li>• Formats acceptés : JPG, PNG, WebP</li>
-                    <li>• Taille maximale : 5 MB</li>
-                  </ul>
-                </div>
-
-                {/* SECTION 4: URL ACTUELLE */}
-                {heroBannerUrl && (
+        {loading ? (
+          <Card>
+            <CardContent className="py-8 text-center">
+              Chargement...
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* SECTION 1: BANNIÈRE */}
+            <Card>
+              <CardHeader>
+                <CardTitle>🖼️ Bannière de la page d'accueil</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {previewUrl ? (
                   <div className="space-y-2">
-                    <Label>URL de la bannière actuelle</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={heroBannerUrl}
-                        readOnly
-                        className="flex-1 bg-gray-50 text-xs"
+                    <Label>Aperçu de la bannière actuelle</Label>
+                    <div className="relative w-full h-64 md:h-96 border-2 border-gray-200 rounded-xl overflow-hidden bg-gray-100">
+                      <Image
+                        src={previewUrl}
+                        alt="Bannière hero actuelle"
+                        fill
+                        className="object-cover"
+                        priority
                       />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          navigator.clipboard.writeText(heroBannerUrl);
-                          toast({
-                            title: "Copié !",
-                            description: "URL copiée dans le presse-papier",
-                          });
-                        }}
+                      <button
+                        type="button"
+                        onClick={handleRemovePreview}
+                        className="absolute top-4 right-4 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 shadow-lg"
+                        title="Supprimer et changer la bannière"
                       >
-                        Copier
-                      </Button>
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      💡 Cliquez sur X pour changer la bannière
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <Label htmlFor="banner">
+                      Sélectionner une image (JPG, PNG, WebP)
+                    </Label>
+                    <div className="mt-2">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id="banner"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleBannerUpload}
+                          disabled={uploading}
+                          className="flex-1"
+                        />
+                        {uploading && (
+                          <span className="text-sm text-gray-500 flex items-center gap-2">
+                            <Upload className="w-4 h-4 animate-pulse" />
+                            Upload en cours...
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        ℹ️ Format paysage (16:9), max 5 MB, résolution 1920x1080px recommandée
+                      </p>
                     </div>
                   </div>
                 )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+
+            {/* SECTION 2: TEXTES HERO */}
+            <Card>
+              <CardHeader>
+                <CardTitle>✏️ Textes de la page d'accueil</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="title">Titre principal</Label>
+                  <Input
+                    id="title"
+                    value={heroTitle}
+                    onChange={(e) => setHeroTitle(e.target.value)}
+                    placeholder="Ex: VITO"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="subtitle">Sous-titre</Label>
+                  <Input
+                    id="subtitle"
+                    value={heroSubtitle}
+                    onChange={(e) => setHeroSubtitle(e.target.value)}
+                    placeholder="Ex: Rapide. Fiable. Centré sur l'essentiel."
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={heroDescription}
+                    onChange={(e) => setHeroDescription(e.target.value)}
+                    placeholder="VITO transforme votre expérience..."
+                    rows={4}
+                  />
+                </div>
+
+                <Button
+                  onClick={handleSaveTexts}
+                  disabled={saving}
+                  className="gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  {saving ? "Sauvegarde..." : "Sauvegarder les textes"}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* SECTION 3: STATISTIQUES */}
+            <Card>
+              <CardHeader>
+                <CardTitle>📊 Statistiques (affichées sous le texte)</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Stat 1 */}
+                <div className="border-b pb-4">
+                  <h3 className="font-semibold mb-3">Statistique 1</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="stat1value">Valeur</Label>
+                      <Input
+                        id="stat1value"
+                        value={stat1Value}
+                        onChange={(e) => setStat1Value(e.target.value)}
+                        placeholder="+100"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="stat1label">Label</Label>
+                      <Input
+                        id="stat1label"
+                        value={stat1Label}
+                        onChange={(e) => setStat1Label(e.target.value)}
+                        placeholder="Points de vente"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stat 2 */}
+                <div className="border-b pb-4">
+                  <h3 className="font-semibold mb-3">Statistique 2</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="stat2value">Valeur</Label>
+                      <Input
+                        id="stat2value"
+                        value={stat2Value}
+                        onChange={(e) => setStat2Value(e.target.value)}
+                        placeholder="24/7"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="stat2label">Label</Label>
+                      <Input
+                        id="stat2label"
+                        value={stat2Label}
+                        onChange={(e) => setStat2Label(e.target.value)}
+                        placeholder="Service client"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stat 3 */}
+                <div className="border-b pb-4">
+                  <h3 className="font-semibold mb-3">Statistique 3</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="stat3value">Valeur</Label>
+                      <Input
+                        id="stat3value"
+                        value={stat3Value}
+                        onChange={(e) => setStat3Value(e.target.value)}
+                        placeholder="100%"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="stat3label">Label</Label>
+                      <Input
+                        id="stat3label"
+                        value={stat3Label}
+                        onChange={(e) => setStat3Label(e.target.value)}
+                        placeholder="Sécurité garantie"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleSaveStats}
+                  disabled={saving}
+                  className="gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  {saving ? "Sauvegarde..." : "Sauvegarder les statistiques"}
+                </Button>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </main>
     </div>
   );
