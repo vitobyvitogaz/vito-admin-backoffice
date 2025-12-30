@@ -293,6 +293,17 @@ export default function DashboardPage() {
                   Attribution des rôles RBAC
                 </div>
               </Link>
+              <Link
+                href="/admin/settings"
+                className="block p-4 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors"
+              >
+                <div className="font-semibold text-indigo-900">
+                  ⚙️ Paramètres de l'Application
+                </div>
+                <div className="text-sm text-indigo-700 mt-1">
+                  Bannière, textes et statistiques de la homepage
+                </div>
+              </Link>
             </CardContent>
           </Card>
 
