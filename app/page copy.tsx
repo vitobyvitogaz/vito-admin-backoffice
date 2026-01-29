@@ -13,7 +13,6 @@ import {
   TrendingUp,
   BarChart3,
   Activity,
-  Package,
 } from "lucide-react";
 import Link from "next/link";
 import { Header } from "@/components/Header";
@@ -40,7 +39,6 @@ interface Stats {
   deliveryCompanies: number;
   documents: number;
   promotions: number;
-  products: number;
 }
 
 const COLORS = ["#3B82F6", "#10B981", "#8B5CF6", "#F59E0B"];
@@ -52,11 +50,11 @@ export default function DashboardPage() {
     deliveryCompanies: 0,
     documents: 0,
     promotions: 0,
-    products: 0,
   });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Vérifier l'authentification
     if (!isAuthenticated()) {
       router.push("/login");
       return;
@@ -68,12 +66,11 @@ export default function DashboardPage() {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL;
       
-      const [resellers, delivery, docs, promos, products] = await Promise.all([
+      const [resellers, delivery, docs, promos] = await Promise.all([
         fetch(`${apiUrl}/resellers`).then((r) => r.json()),
         fetch(`${apiUrl}/delivery-companies`).then((r) => r.json()),
         fetch(`${apiUrl}/documents`).then((r) => r.json()),
         fetch(`${apiUrl}/promotions/active`).then((r) => r.json()),
-        fetch(`${apiUrl}/products`).then((r) => r.json()),
       ]);
 
       setStats({
@@ -81,7 +78,6 @@ export default function DashboardPage() {
         deliveryCompanies: delivery.length || 0,
         documents: docs.length || 0,
         promotions: promos.length || 0,
-        products: products.length || 0,
       });
     } catch (error) {
       console.error("Erreur chargement stats:", error);
@@ -90,6 +86,7 @@ export default function DashboardPage() {
     }
   };
 
+  // Données pour les graphiques
   const monthlyData = [
     { month: "Jan", commandes: 45, revenus: 12000 },
     { month: "Fév", commandes: 52, revenus: 14500 },
@@ -114,14 +111,6 @@ export default function DashboardPage() {
       href: "/resellers",
       color: "text-blue-600",
       bgColor: "bg-blue-50",
-    },
-    {
-      title: "Produits",
-      value: stats.products,
-      icon: Package,
-      href: "/products",
-      color: "text-red-600",
-      bgColor: "bg-red-50",
     },
     {
       title: "Sociétés de Livraison",
@@ -155,7 +144,8 @@ export default function DashboardPage() {
       <Navigation />
 
       <main className="p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {statCards.map((card) => {
             const Icon = card.icon;
             return (
@@ -183,7 +173,9 @@ export default function DashboardPage() {
           })}
         </div>
 
+        {/* Analytics Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Line Chart - Évolution Commandes */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -211,6 +203,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
+          {/* Bar Chart - Revenus */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -233,7 +226,9 @@ export default function DashboardPage() {
           </Card>
         </div>
 
+        {/* Quick Actions & System Overview */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Actions Rapides */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -251,17 +246,6 @@ export default function DashboardPage() {
                 </div>
                 <div className="text-sm text-blue-700 mt-1">
                   Créer une nouvelle fiche revendeur
-                </div>
-              </Link>
-              <Link
-                href="/products"
-                className="block p-4 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
-              >
-                <div className="font-semibold text-red-900">
-                  Ajouter un Produit
-                </div>
-                <div className="text-sm text-red-700 mt-1">
-                  Créer un nouveau produit avec image
                 </div>
               </Link>
               <Link
@@ -323,6 +307,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
+          {/* Aperçu Système */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -354,7 +339,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Modules CRUD</span>
                 <span className="text-sm font-semibold text-green-600">
-                  ✅ 7/7 complets
+                  ✅ 6/6 complets
                 </span>
               </div>
               <div className="flex items-center justify-between">
