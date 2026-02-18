@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Settings, Image as ImageIcon, X, Upload, Save } from "lucide-react";
+import { Settings, Image as ImageIcon, X, Upload, Save, Monitor, Smartphone } from "lucide-react";
 import Link from "next/link";
 import { toast } from "@/lib/use-toast";
 import Image from "next/image";
@@ -23,10 +23,13 @@ interface AppSetting {
 }
 
 export default function SettingsPage() {
-  // Bannière
-  const [heroBannerUrl, setHeroBannerUrl] = useState<string>("");
-  const [previewUrl, setPreviewUrl] = useState<string>("");
-  const [uploading, setUploading] = useState(false);
+  // Bannières
+  const [heroBannerDesktop, setHeroBannerDesktop] = useState<string>("");
+  const [heroBannerMobile, setHeroBannerMobile] = useState<string>("");
+  const [previewDesktop, setPreviewDesktop] = useState<string>("");
+  const [previewMobile, setPreviewMobile] = useState<string>("");
+  const [uploadingDesktop, setUploadingDesktop] = useState(false);
+  const [uploadingMobile, setUploadingMobile] = useState(false);
   
   // Textes
   const [heroTitle, setHeroTitle] = useState<string>("");
@@ -62,8 +65,12 @@ export default function SettingsPage() {
       data.forEach(setting => {
         switch(setting.setting_key) {
           case 'hero_banner_url':
-            setHeroBannerUrl(setting.setting_value);
-            setPreviewUrl(setting.setting_value);
+            setHeroBannerDesktop(setting.setting_value);
+            setPreviewDesktop(setting.setting_value);
+            break;
+          case 'hero_banner_url_mobile':
+            setHeroBannerMobile(setting.setting_value);
+            setPreviewMobile(setting.setting_value);
             break;
           case 'hero_title':
             setHeroTitle(setting.setting_value);
@@ -107,7 +114,10 @@ export default function SettingsPage() {
     }
   };
 
-  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBannerUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    type: 'desktop' | 'mobile'
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -130,12 +140,20 @@ export default function SettingsPage() {
     }
 
     try {
-      setUploading(true);
+      if (type === 'desktop') {
+        setUploadingDesktop(true);
+      } else {
+        setUploadingMobile(true);
+      }
 
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`${API_URL}/settings/upload-hero-banner`, {
+      const endpoint = type === 'desktop' 
+        ? `${API_URL}/settings/upload-hero-banner`
+        : `${API_URL}/settings/upload-hero-banner-mobile`;
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         body: formData,
       });
@@ -146,12 +164,17 @@ export default function SettingsPage() {
 
       const data = await response.json();
 
-      setHeroBannerUrl(data.file_url);
-      setPreviewUrl(data.file_url);
+      if (type === 'desktop') {
+        setHeroBannerDesktop(data.file_url);
+        setPreviewDesktop(data.file_url);
+      } else {
+        setHeroBannerMobile(data.file_url);
+        setPreviewMobile(data.file_url);
+      }
 
       toast({
         title: "Succès !",
-        description: "Bannière uploadée et mise à jour avec succès",
+        description: `Bannière ${type === 'desktop' ? 'Desktop' : 'Mobile'} uploadée avec succès`,
       });
 
       await fetchSettings();
@@ -164,7 +187,11 @@ export default function SettingsPage() {
         variant: "destructive",
       });
     } finally {
-      setUploading(false);
+      if (type === 'desktop') {
+        setUploadingDesktop(false);
+      } else {
+        setUploadingMobile(false);
+      }
     }
   };
 
@@ -172,7 +199,7 @@ export default function SettingsPage() {
     try {
       setSaving(true);
 
-      // Mettre à jour tous les textes
+      // Mettre à jour tous les textes (même si vides)
       const updates = [
         { key: 'hero_title', value: heroTitle },
         { key: 'hero_subtitle', value: heroSubtitle },
@@ -254,9 +281,14 @@ export default function SettingsPage() {
     }
   };
 
-  const handleRemovePreview = () => {
-    setPreviewUrl("");
-    setHeroBannerUrl("");
+  const handleRemovePreview = (type: 'desktop' | 'mobile') => {
+    if (type === 'desktop') {
+      setPreviewDesktop("");
+      setHeroBannerDesktop("");
+    } else {
+      setPreviewMobile("");
+      setHeroBannerMobile("");
+    }
   };
 
   return (
@@ -326,7 +358,7 @@ export default function SettingsPage() {
           <div>
             <h2 className="text-2xl font-bold">Contenu de la page d'accueil</h2>
             <p className="text-sm text-gray-500">
-              Gérer la bannière, les textes et les statistiques
+              Gérer les bannières, les textes et les statistiques
             </p>
           </div>
         </div>
@@ -339,71 +371,147 @@ export default function SettingsPage() {
           </Card>
         ) : (
           <>
-            {/* SECTION 1: BANNIÈRE */}
+            {/* SECTION 1: BANNIÈRES (Desktop + Mobile) */}
             <Card>
               <CardHeader>
-                <CardTitle>🖼️ Bannière de la page d'accueil</CardTitle>
+                <CardTitle>🖼️ Bannières de la page d'accueil (Art Direction)</CardTitle>
+                <p className="text-sm text-gray-500 mt-2">
+                  💡 Utilisez 2 images différentes pour une expérience optimale : paysage pour desktop, portrait pour mobile
+                </p>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {previewUrl ? (
-                  <div className="space-y-2">
-                    <Label>Aperçu de la bannière actuelle</Label>
-                    <div className="relative w-full h-64 md:h-96 border-2 border-gray-200 rounded-xl overflow-hidden bg-gray-100">
-                      <Image
-                        src={previewUrl}
-                        alt="Bannière hero actuelle"
-                        fill
-                        className="object-cover"
-                        priority
-                      />
-                      <button
-                        type="button"
-                        onClick={handleRemovePreview}
-                        className="absolute top-4 right-4 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 shadow-lg"
-                        title="Supprimer et changer la bannière"
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      💡 Cliquez sur X pour changer la bannière
-                    </p>
+              <CardContent className="space-y-6">
+                
+                {/* BANNIÈRE DESKTOP */}
+                <div className="border-2 border-gray-200 rounded-xl p-4 bg-gray-50">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Monitor className="w-5 h-5 text-blue-600" />
+                    <h3 className="font-semibold text-lg">Bannière Desktop (Paysage)</h3>
                   </div>
-                ) : (
-                  <div>
-                    <Label htmlFor="banner">
-                      Sélectionner une image (JPG, PNG, WebP)
-                    </Label>
-                    <div className="mt-2">
-                      <div className="flex items-center gap-2">
-                        <Input
-                          id="banner"
-                          type="file"
-                          accept="image/*"
-                          onChange={handleBannerUpload}
-                          disabled={uploading}
-                          className="flex-1"
+                  
+                  {previewDesktop ? (
+                    <div className="space-y-2">
+                      <Label>Aperçu actuel</Label>
+                      <div className="relative w-full aspect-video border-2 border-gray-200 rounded-xl overflow-hidden bg-gray-100">
+                        <Image
+                          src={previewDesktop}
+                          alt="Bannière desktop"
+                          fill
+                          className="object-cover"
+                          priority
                         />
-                        {uploading && (
-                          <span className="text-sm text-gray-500 flex items-center gap-2">
-                            <Upload className="w-4 h-4 animate-pulse" />
-                            Upload en cours...
-                          </span>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePreview('desktop')}
+                          className="absolute top-4 right-4 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 shadow-lg"
+                          title="Supprimer et changer"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
                       </div>
-                      <p className="text-xs text-gray-500 mt-2">
-                        ℹ️ Format paysage (16:9), max 5 MB, résolution 1920x1080px recommandée
+                      <p className="text-xs text-gray-500">
+                        💡 Cliquez sur X pour changer l'image
                       </p>
                     </div>
+                  ) : (
+                    <div>
+                      <Label htmlFor="banner-desktop">
+                        Sélectionner une image paysage (16:9)
+                      </Label>
+                      <div className="mt-2">
+                        <div className="flex items-center gap-2">
+                          <Input
+                            id="banner-desktop"
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleBannerUpload(e, 'desktop')}
+                            disabled={uploadingDesktop}
+                            className="flex-1"
+                          />
+                          {uploadingDesktop && (
+                            <span className="text-sm text-gray-500 flex items-center gap-2">
+                              <Upload className="w-4 h-4 animate-pulse" />
+                              Upload...
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                          ℹ️ Format 16:9 (paysage), max 5 MB, résolution 1920x1080px recommandée
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* BANNIÈRE MOBILE */}
+                <div className="border-2 border-gray-200 rounded-xl p-4 bg-gray-50">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Smartphone className="w-5 h-5 text-green-600" />
+                    <h3 className="font-semibold text-lg">Bannière Mobile (Portrait)</h3>
                   </div>
-                )}
+                  
+                  {previewMobile ? (
+                    <div className="space-y-2">
+                      <Label>Aperçu actuel</Label>
+                      <div className="relative w-full max-w-sm mx-auto aspect-[4/5] border-2 border-gray-200 rounded-xl overflow-hidden bg-gray-100">
+                        <Image
+                          src={previewMobile}
+                          alt="Bannière mobile"
+                          fill
+                          className="object-cover"
+                          priority
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePreview('mobile')}
+                          className="absolute top-4 right-4 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 shadow-lg"
+                          title="Supprimer et changer"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500 text-center">
+                        💡 Cliquez sur X pour changer l'image
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <Label htmlFor="banner-mobile">
+                        Sélectionner une image portrait (4:5)
+                      </Label>
+                      <div className="mt-2">
+                        <div className="flex items-center gap-2">
+                          <Input
+                            id="banner-mobile"
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleBannerUpload(e, 'mobile')}
+                            disabled={uploadingMobile}
+                            className="flex-1"
+                          />
+                          {uploadingMobile && (
+                            <span className="text-sm text-gray-500 flex items-center gap-2">
+                              <Upload className="w-4 h-4 animate-pulse" />
+                              Upload...
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                          ℹ️ Format 4:5 (portrait), max 5 MB, résolution 1080x1350px recommandée
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
             {/* SECTION 2: TEXTES HERO */}
             <Card>
               <CardHeader>
-                <CardTitle>✏️ Textes de la page d'accueil</CardTitle>
+                <CardTitle>✏️ Textes de la Glass Card</CardTitle>
+                <p className="text-sm text-gray-500 mt-2">
+                  ⚠️ Si vous laissez un champ vide, rien ne s'affichera sur le frontend
+                </p>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
@@ -412,8 +520,11 @@ export default function SettingsPage() {
                     id="title"
                     value={heroTitle}
                     onChange={(e) => setHeroTitle(e.target.value)}
-                    placeholder="Ex: VITO"
+                    placeholder="Ex: VITO BY VITOGAZ"
                   />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Laisser vide = rien ne s'affiche
+                  </p>
                 </div>
 
                 <div>
@@ -424,6 +535,9 @@ export default function SettingsPage() {
                     onChange={(e) => setHeroSubtitle(e.target.value)}
                     placeholder="Ex: Rapide. Fiable. Centré sur l'essentiel."
                   />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Laisser vide = rien ne s'affiche
+                  </p>
                 </div>
 
                 <div>
@@ -432,9 +546,12 @@ export default function SettingsPage() {
                     id="description"
                     value={heroDescription}
                     onChange={(e) => setHeroDescription(e.target.value)}
-                    placeholder="VITO transforme votre expérience..."
+                    placeholder="VITO transforme votre expérience Vitogaz..."
                     rows={4}
                   />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Laisser vide = rien ne s'affiche
+                  </p>
                 </div>
 
                 <Button
@@ -451,7 +568,10 @@ export default function SettingsPage() {
             {/* SECTION 3: STATISTIQUES */}
             <Card>
               <CardHeader>
-                <CardTitle>📊 Statistiques (affichées sous le texte)</CardTitle>
+                <CardTitle>📊 Statistiques (affichées dans la Glass Card)</CardTitle>
+                <p className="text-sm text-gray-500 mt-2">
+                  ⚠️ Si vous laissez vides, rien ne s'affichera
+                </p>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Stat 1 */}
@@ -464,7 +584,7 @@ export default function SettingsPage() {
                         id="stat1value"
                         value={stat1Value}
                         onChange={(e) => setStat1Value(e.target.value)}
-                        placeholder="+100"
+                        placeholder="95%"
                       />
                     </div>
                     <div>
@@ -473,7 +593,7 @@ export default function SettingsPage() {
                         id="stat1label"
                         value={stat1Label}
                         onChange={(e) => setStat1Label(e.target.value)}
-                        placeholder="Points de vente"
+                        placeholder="Points de vente couverts"
                       />
                     </div>
                   </div>

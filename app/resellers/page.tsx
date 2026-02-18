@@ -21,6 +21,8 @@ import {
   Search,
   MapPin,
   Phone,
+  Package,
+  Clock,
 } from "lucide-react";
 import Link from "next/link";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
@@ -39,13 +41,29 @@ interface Reseller {
   is_active: boolean;
 }
 
+interface Product {
+  id: string;
+  name: string;
+  category: string;
+  product_code: string;
+  is_active: boolean;
+}
+
+interface ResellerProduct {
+  product_id: string;
+  products: Product;
+}
+
 export default function ResellersPage() {
   const [resellers, setResellers] = useState<Reseller[]>([]);
   const [filteredResellers, setFilteredResellers] = useState<Reseller[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [resellerProducts, setResellerProducts] = useState<Record<string, ResellerProduct[]>>({});
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -60,6 +78,7 @@ export default function ResellersPage() {
 
   useEffect(() => {
     fetchResellers();
+    fetchProducts();
   }, []);
 
   useEffect(() => {
@@ -82,6 +101,9 @@ export default function ResellersPage() {
       const data = await apiGet<Reseller[]>('/resellers');
       setResellers(data);
       setFilteredResellers(data);
+      
+      // Charger les produits de chaque revendeur
+      await fetchAllResellerProducts(data);
     } catch (error) {
       console.error("Erreur chargement revendeurs:", error);
       toast({
@@ -92,6 +114,87 @@ export default function ResellersPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchAllResellerProducts = async (resellers: Reseller[]) => {
+    // Charger tous les produits en parallèle
+    const promises = resellers.map(async (reseller) => {
+      try {
+        const data = await apiGet<ResellerProduct[]>(`/resellers/${reseller.id}/products`);
+        return { id: reseller.id, products: data };
+      } catch (error) {
+        console.error(`Erreur chargement produits pour ${reseller.name}:`, error);
+        return { id: reseller.id, products: [] };
+      }
+    });
+
+    const results = await Promise.all(promises);
+    
+    const productsMap: Record<string, ResellerProduct[]> = {};
+    results.forEach(result => {
+      productsMap[result.id] = result.products;
+    });
+    
+    setResellerProducts(productsMap);
+  };
+
+  const fetchProducts = async () => {
+    try {
+      const data = await apiGet<Product[]>('/products');
+      setProducts(data.filter(p => p.is_active));
+    } catch (error) {
+      console.error("Erreur chargement produits:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les produits",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const fetchResellerProducts = async (resellerId: string) => {
+    try {
+      const data = await apiGet<ResellerProduct[]>(`/resellers/${resellerId}/products`);
+      const productIds = data.map(item => item.product_id);
+      setSelectedProducts(productIds);
+    } catch (error) {
+      console.error("Erreur chargement produits du revendeur:", error);
+    }
+  };
+
+  const getCategoryBadges = (resellerId: string) => {
+    const products = resellerProducts[resellerId] || [];
+    if (products.length === 0) return null;
+
+    // Grouper par catégorie
+    const categoryGroups: Record<string, number> = {};
+    products.forEach(item => {
+      const category = item.products.category;
+      categoryGroups[category] = (categoryGroups[category] || 0) + 1;
+    });
+
+    // Couleurs par catégorie
+    const categoryColors: Record<string, string> = {
+      'Bouteilles': 'bg-blue-100 text-blue-700',
+      'Accessoires': 'bg-green-100 text-green-700',
+      'Kit': 'bg-purple-100 text-purple-700',
+      'Gaz au détail': 'bg-orange-100 text-orange-700',
+    };
+
+    return (
+      <div className="flex flex-wrap gap-2 items-center">
+        {Object.entries(categoryGroups).map(([category, count]) => (
+          <span
+            key={category}
+            className={`px-2 py-1 text-xs rounded-full ${
+              categoryColors[category] || 'bg-gray-100 text-gray-700'
+            }`}
+          >
+            {category} ({count})
+          </span>
+        ))}
+      </div>
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -108,6 +211,8 @@ export default function ResellersPage() {
     };
 
     try {
+      let resellerId = editingId;
+      
       if (editingId) {
         await apiPatch(`/resellers/${editingId}`, payload);
         toast({
@@ -115,10 +220,18 @@ export default function ResellersPage() {
           description: "Revendeur modifié avec succès",
         });
       } else {
-        await apiPost('/resellers', payload);
+        const newReseller = await apiPost<Reseller>('/resellers', payload);
+        resellerId = newReseller.id;
         toast({
           title: "Succès !",
           description: "Revendeur créé avec succès",
+        });
+      }
+
+      // Sauvegarder les produits
+      if (resellerId) {
+        await apiPost(`/resellers/${resellerId}/products`, {
+          productIds: selectedProducts
         });
       }
       
@@ -134,7 +247,7 @@ export default function ResellersPage() {
     }
   };
 
-  const handleEdit = (reseller: Reseller) => {
+  const handleEdit = async (reseller: Reseller) => {
     setFormData({
       name: reseller.name,
       address: reseller.address,
@@ -147,6 +260,9 @@ export default function ResellersPage() {
     });
     setEditingId(reseller.id);
     setShowForm(true);
+    
+    // Charger les produits du revendeur
+    await fetchResellerProducts(reseller.id);
   };
 
   const handleDelete = async (id: string) => {
@@ -169,6 +285,14 @@ export default function ResellersPage() {
     }
   };
 
+  const toggleProduct = (productId: string) => {
+    setSelectedProducts(prev =>
+      prev.includes(productId)
+        ? prev.filter(id => id !== productId)
+        : [...prev, productId]
+    );
+  };
+
   const resetForm = () => {
     setFormData({
       name: "",
@@ -182,6 +306,7 @@ export default function ResellersPage() {
     });
     setEditingId(null);
     setShowForm(false);
+    setSelectedProducts([]);
   };
 
   return (
@@ -214,7 +339,7 @@ export default function ResellersPage() {
               Dashboard
             </Link>
             <Link
-              href="/resellers"
+              href="/revendeurs"
               className="px-3 py-4 text-sm font-medium text-blue-600 border-b-2 border-blue-600"
             >
               Revendeurs
@@ -269,112 +394,158 @@ export default function ResellersPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="name">Nom *</Label>
-                    <Input
-                      id="name"
-                      required
-                      value={formData.name}
-                      onChange={(e) =>
-                        setFormData({ ...formData, name: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="city">Ville *</Label>
-                    <Input
-                      id="city"
-                      required
-                      value={formData.city}
-                      onChange={(e) =>
-                        setFormData({ ...formData, city: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label htmlFor="address">Adresse *</Label>
-                    <Input
-                      id="address"
-                      required
-                      value={formData.address}
-                      onChange={(e) =>
-                        setFormData({ ...formData, address: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="latitude">Latitude *</Label>
-                    <Input
-                      id="latitude"
-                      type="number"
-                      step="any"
-                      required
-                      value={formData.latitude}
-                      onChange={(e) =>
-                        setFormData({ ...formData, latitude: e.target.value })
-                      }
-                      placeholder="-18.8792"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="longitude">Longitude *</Label>
-                    <Input
-                      id="longitude"
-                      type="number"
-                      step="any"
-                      required
-                      value={formData.longitude}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          longitude: e.target.value,
-                        })
-                      }
-                      placeholder="47.5079"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="type">Type *</Label>
-                    <select
-                      id="type"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      value={formData.type}
-                      onChange={(e) =>
-                        setFormData({ ...formData, type: e.target.value })
-                      }
-                    >
-                      <option value="Station Service">Station Service</option>
-                      <option value="Épicerie">Épicerie</option>
-                      <option value="Quincaillerie">Quincaillerie</option>
-                      <option value="Autres">Autres</option>
-                    </select>
-                  </div>
-                  <div>
-                    <Label htmlFor="phone">Téléphone *</Label>
-                    <Input
-                      id="phone"
-                      required
-                      value={formData.phone}
-                      onChange={(e) =>
-                        setFormData({ ...formData, phone: e.target.value })
-                      }
-                      placeholder="+261 32 00 00 001"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="whatsapp">WhatsApp</Label>
-                    <Input
-                      id="whatsapp"
-                      value={formData.whatsapp}
-                      onChange={(e) =>
-                        setFormData({ ...formData, whatsapp: e.target.value })
-                      }
-                      placeholder="+261 32 00 00 001"
-                    />
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Informations de base */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Informations de base</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="name">Nom *</Label>
+                      <Input
+                        id="name"
+                        required
+                        value={formData.name}
+                        onChange={(e) =>
+                          setFormData({ ...formData, name: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="city">Ville *</Label>
+                      <Input
+                        id="city"
+                        required
+                        value={formData.city}
+                        onChange={(e) =>
+                          setFormData({ ...formData, city: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <Label htmlFor="address">Adresse *</Label>
+                      <Input
+                        id="address"
+                        required
+                        value={formData.address}
+                        onChange={(e) =>
+                          setFormData({ ...formData, address: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="latitude">Latitude *</Label>
+                      <Input
+                        id="latitude"
+                        type="number"
+                        step="any"
+                        required
+                        value={formData.latitude}
+                        onChange={(e) =>
+                          setFormData({ ...formData, latitude: e.target.value })
+                        }
+                        placeholder="-18.8792"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="longitude">Longitude *</Label>
+                      <Input
+                        id="longitude"
+                        type="number"
+                        step="any"
+                        required
+                        value={formData.longitude}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            longitude: e.target.value,
+                          })
+                        }
+                        placeholder="47.5079"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="type">Type *</Label>
+                      <select
+                        id="type"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={formData.type}
+                        onChange={(e) =>
+                          setFormData({ ...formData, type: e.target.value })
+                        }
+                      >
+                        <option value="Station Service">Station Service</option>
+                        <option value="Épicerie">Épicerie</option>
+                        <option value="Quincaillerie">Quincaillerie</option>
+                        <option value="Libre service">Libre service</option>
+                        <option value="Autres">Autres</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label htmlFor="phone">Téléphone *</Label>
+                      <Input
+                        id="phone"
+                        required
+                        value={formData.phone}
+                        onChange={(e) =>
+                          setFormData({ ...formData, phone: e.target.value })
+                        }
+                        placeholder="+261 32 00 00 001"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="whatsapp">WhatsApp</Label>
+                      <Input
+                        id="whatsapp"
+                        value={formData.whatsapp}
+                        onChange={(e) =>
+                          setFormData({ ...formData, whatsapp: e.target.value })
+                        }
+                        placeholder="+261 32 00 00 001"
+                      />
+                    </div>
                   </div>
                 </div>
+
+                {/* Produits vendus */}
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Package className="w-5 h-5 text-blue-600" />
+                    <h3 className="text-lg font-semibold">Produits vendus</h3>
+                    <span className="text-sm text-gray-500">
+                      ({selectedProducts.length} sélectionné{selectedProducts.length > 1 ? 's' : ''})
+                    </span>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {products.map((product) => (
+                      <div
+                        key={product.id}
+                        onClick={() => toggleProduct(product.id)}
+                        className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                          selectedProducts.includes(product.id)
+                            ? 'border-blue-600 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <p className="font-medium text-sm">{product.name}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {product.category}
+                            </p>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={selectedProducts.includes(product.id)}
+                            onChange={() => {}}
+                            className="mt-1"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="flex gap-3">
                   <Button type="submit">
                     {editingId ? "Mettre à jour" : "Créer"}
@@ -410,8 +581,8 @@ export default function ResellersPage() {
               <TableRow>
                 <TableHead>Nom</TableHead>
                 <TableHead>Ville</TableHead>
-                <TableHead>Adresse</TableHead>
                 <TableHead>Type</TableHead>
+                <TableHead>Produits</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -441,13 +612,15 @@ export default function ResellersPage() {
                         {reseller.city}
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm text-gray-600">
-                      {reseller.address}
-                    </TableCell>
                     <TableCell>
                       <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">
                         {reseller.type}
                       </span>
+                    </TableCell>
+                    <TableCell>
+                      {getCategoryBadges(reseller.id) || (
+                        <span className="text-xs text-gray-400">Aucun produit</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1 text-sm">
@@ -457,10 +630,20 @@ export default function ResellersPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        <Link href={`/revendeurs/${reseller.id}`}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            title="Horaires et produits"
+                          >
+                            <Clock className="w-4 h-4" />
+                          </Button>
+                        </Link>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => handleEdit(reseller)}
+                          title="Modifier"
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
@@ -468,6 +651,7 @@ export default function ResellersPage() {
                           variant="destructive"
                           size="sm"
                           onClick={() => handleDelete(reseller.id)}
+                          title="Supprimer"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
