@@ -24,6 +24,9 @@ import {
   Download,
   ChevronLeft,
   ChevronRight,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import Link from "next/link";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
@@ -34,6 +37,9 @@ import { Header } from "@/components/Header";
 import { Navigation } from "@/components/Navigation";
 
 const PAGE_SIZE = 50;
+
+// SortKey sans null
+type SortKey = "product_code" | "name" | "category" | "price" | "is_active";
 
 interface Product {
   id: string;
@@ -51,6 +57,7 @@ interface Product {
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [sortedProducts, setSortedProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -59,6 +66,10 @@ export default function ProductsPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  // Tri
+  const [sortColumn, setSortColumn] = useState<SortKey | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -95,18 +106,87 @@ export default function ProductsPage() {
     setCurrentPage(1);
   }, [searchQuery, products]);
 
+  // Tri appliqué après filtre
+  useEffect(() => {
+    if (!sortColumn || !sortDirection) {
+      setSortedProducts(filteredProducts);
+      return;
+    }
+    const col = sortColumn;
+    const dir = sortDirection;
+    const sorted = [...filteredProducts].sort((a, b) => {
+      let valA: string | number | boolean = "";
+      let valB: string | number | boolean = "";
+
+      if (col === "price") {
+        valA = a.price ?? -1;
+        valB = b.price ?? -1;
+        return dir === "asc" ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
+      }
+
+      if (col === "is_active") {
+        valA = a.is_active ? 1 : 0;
+        valB = b.is_active ? 1 : 0;
+        return dir === "asc" ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
+      }
+
+      // Colonnes texte : product_code, name, category
+      const strA = (a[col] ?? "").toString().toLowerCase();
+      const strB = (b[col] ?? "").toString().toLowerCase();
+      if (strA < strB) return dir === "asc" ? -1 : 1;
+      if (strA > strB) return dir === "asc" ? 1 : -1;
+      return 0;
+    });
+    setSortedProducts(sorted);
+    setCurrentPage(1);
+  }, [filteredProducts, sortColumn, sortDirection]);
+
   // Données de la page courante
-  const totalPages = Math.ceil(filteredProducts.length / PAGE_SIZE);
-  const paginatedProducts = filteredProducts.slice(
+  const totalPages = Math.ceil(sortedProducts.length / PAGE_SIZE);
+  const paginatedProducts = sortedProducts.slice(
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE
   );
+
+  // Gestion du clic sur un header de colonne
+  const handleSort = (column: SortKey) => {
+    if (sortColumn !== column) {
+      setSortColumn(column);
+      setSortDirection("asc");
+    } else if (sortDirection === "asc") {
+      setSortDirection("desc");
+    } else {
+      setSortColumn(null);
+      setSortDirection(null);
+    }
+  };
+
+  // Icône de tri
+  const SortIcon = ({ column }: { column: SortKey }) => {
+    if (sortColumn !== column) return <ArrowUpDown className="w-3.5 h-3.5 text-gray-400 ml-1 inline" />;
+    if (sortDirection === "asc") return <ArrowUp className="w-3.5 h-3.5 text-blue-600 ml-1 inline" />;
+    return <ArrowDown className="w-3.5 h-3.5 text-blue-600 ml-1 inline" />;
+  };
+
+  // Label du tri actif
+  const sortLabel = (): string | null => {
+    if (!sortColumn || !sortDirection) return null;
+    const labels: Record<SortKey, string> = {
+      product_code: "Code",
+      name: "Nom",
+      category: "Catégorie",
+      price: "Prix",
+      is_active: "Actif",
+    };
+    return `Trié par ${labels[sortColumn]} (${sortDirection === "asc" ? "A → Z" : "Z → A"})`;
+  };
 
   const fetchProducts = async () => {
     try {
       const data = await apiGet<Product[]>('/products');
       setProducts(data);
       setFilteredProducts(data);
+      setSortedProducts(data);
     } catch (error) {
       console.error("Erreur chargement produits:", error);
       toast({
@@ -160,7 +240,7 @@ export default function ProductsPage() {
   // Export CSV
   const handleExportCSV = () => {
     exportToCSV(
-      filteredProducts,
+      sortedProducts,
       "produits",
       {
         product_code: "Code",
@@ -272,6 +352,15 @@ export default function ProductsPage() {
     setShowForm(false);
   };
 
+  // Colonnes triables
+  const sortableCols: { key: SortKey; label: string }[] = [
+    { key: "product_code", label: "Code" },
+    { key: "name", label: "Nom" },
+    { key: "category", label: "Catégorie" },
+    { key: "price", label: "Prix" },
+    { key: "is_active", label: "Actif" },
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header title="VIto Admin" subtitle="Gestion des Produits" />
@@ -294,7 +383,7 @@ export default function ProductsPage() {
             <Button
               variant="outline"
               onClick={handleExportCSV}
-              disabled={filteredProducts.length === 0}
+              disabled={sortedProducts.length === 0}
               className="gap-2"
             >
               <Download className="w-4 h-4" />
@@ -459,12 +548,26 @@ export default function ProductsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Code</TableHead>
-                <TableHead>Nom</TableHead>
-                <TableHead>Catégorie</TableHead>
-                <TableHead>Prix</TableHead>
+                {/* Colonnes triables : Code, Nom, Catégorie, Prix, Actif */}
+                {sortableCols.map((col) => {
+                  const isActive = sortColumn === col.key;
+                  return (
+                    <TableHead
+                      key={col.key}
+                      onClick={() => handleSort(col.key)}
+                      className={`cursor-pointer select-none transition-colors ${
+                        isActive ? "bg-blue-50 text-blue-700" : "hover:bg-gray-50"
+                      }`}
+                    >
+                      <span className="flex items-center gap-1">
+                        {col.label}
+                        <SortIcon column={col.key} />
+                      </span>
+                    </TableHead>
+                  );
+                })}
+                {/* Colonne Vedette — non triable */}
                 <TableHead>Vedette</TableHead>
-                <TableHead>Actif</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -514,16 +617,7 @@ export default function ProductsPage() {
                         <span className="text-gray-400">-</span>
                       )}
                     </TableCell>
-                    <TableCell>
-                      {product.is_featured ? (
-                        <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">
-                          ⭐ Vedette
-                        </span>
-                      ) : (
-                        <span className="text-gray-400 text-xs">-</span>
-                      )}
-                    </TableCell>
-                    {/* Toggle is_active */}
+                    {/* Toggle is_active — colonne triable */}
                     <TableCell>
                       <button
                         onClick={() => handleToggleActive(product)}
@@ -539,6 +633,15 @@ export default function ProductsPage() {
                           }`}
                         />
                       </button>
+                    </TableCell>
+                    <TableCell>
+                      {product.is_featured ? (
+                        <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">
+                          ⭐ Vedette
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">-</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
@@ -564,44 +667,49 @@ export default function ProductsPage() {
             </TableBody>
           </Table>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
-              <p className="text-sm text-gray-500">
-                Page {currentPage} sur {totalPages} —{" "}
-                {filteredProducts.length} produit(s)
-              </p>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+          {/* Pied de tableau : indicateur de tri + pagination */}
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 min-h-[52px]">
+            <p className="text-xs text-gray-400 italic">
+              {sortLabel() || ""}
+            </p>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-3">
+                <p className="text-sm text-gray-500">
+                  Page {currentPage} sur {totalPages} —{" "}
+                  {sortedProducts.length} produit(s)
+                </p>
+                <div className="flex items-center gap-1">
                   <Button
-                    key={page}
-                    variant={page === currentPage ? "default" : "outline"}
+                    variant="outline"
                     size="sm"
-                    onClick={() => setCurrentPage(page)}
-                    className="w-8"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
                   >
-                    {page}
+                    <ChevronLeft className="w-4 h-4" />
                   </Button>
-                ))}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <Button
+                      key={page}
+                      variant={page === currentPage ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(page)}
+                      className="w-8"
+                    >
+                      {page}
+                    </Button>
+                  ))}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </Card>
       </main>
     </div>
