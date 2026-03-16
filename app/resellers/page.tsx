@@ -26,13 +26,21 @@ import {
   Download,
   ChevronLeft,
   ChevronRight,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import Link from "next/link";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { toast } from "@/lib/use-toast";
 import { exportToCSV } from "@/lib/export-csv";
+import { Header } from "@/components/Header";
+import { Navigation } from "@/components/Navigation";
 
 const PAGE_SIZE = 50;
+
+// SortKey sans null — utilisé pour indexer les labels
+type SortKey = "name" | "city" | "type";
 
 interface Reseller {
   id: string;
@@ -63,6 +71,7 @@ interface ResellerProduct {
 export default function ResellersPage() {
   const [resellers, setResellers] = useState<Reseller[]>([]);
   const [filteredResellers, setFilteredResellers] = useState<Reseller[]>([]);
+  const [sortedResellers, setSortedResellers] = useState<Reseller[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [resellerProducts, setResellerProducts] = useState<Record<string, ResellerProduct[]>>({});
   const [loading, setLoading] = useState(true);
@@ -71,6 +80,10 @@ export default function ResellersPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  // Tri — SortKey | null pour le state
+  const [sortColumn, setSortColumn] = useState<SortKey | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -109,18 +122,64 @@ export default function ResellersPage() {
     setCurrentPage(1);
   }, [searchQuery, resellers]);
 
-  // Données de la page courante
-  const totalPages = Math.ceil(filteredResellers.length / PAGE_SIZE);
-  const paginatedResellers = filteredResellers.slice(
+  // Tri appliqué après filtre
+  useEffect(() => {
+    if (!sortColumn || !sortDirection) {
+      setSortedResellers(filteredResellers);
+      return;
+    }
+    const col = sortColumn; // TypeScript infère SortKey ici (sans null)
+    const sorted = [...filteredResellers].sort((a, b) => {
+      const valA = a[col].toLowerCase();
+      const valB = b[col].toLowerCase();
+      if (valA < valB) return sortDirection === "asc" ? -1 : 1;
+      if (valA > valB) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+    setSortedResellers(sorted);
+    setCurrentPage(1);
+  }, [filteredResellers, sortColumn, sortDirection]);
+
+  // Données de la page courante (sur les données triées)
+  const totalPages = Math.ceil(sortedResellers.length / PAGE_SIZE);
+  const paginatedResellers = sortedResellers.slice(
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE
   );
+
+  // Gestion du clic sur un header de colonne
+  const handleSort = (column: SortKey) => {
+    if (sortColumn !== column) {
+      setSortColumn(column);
+      setSortDirection("asc");
+    } else if (sortDirection === "asc") {
+      setSortDirection("desc");
+    } else {
+      setSortColumn(null);
+      setSortDirection(null);
+    }
+  };
+
+  // Icône de tri
+  const SortIcon = ({ column }: { column: SortKey }) => {
+    if (sortColumn !== column) return <ArrowUpDown className="w-3.5 h-3.5 text-gray-400 ml-1 inline" />;
+    if (sortDirection === "asc") return <ArrowUp className="w-3.5 h-3.5 text-blue-600 ml-1 inline" />;
+    return <ArrowDown className="w-3.5 h-3.5 text-blue-600 ml-1 inline" />;
+  };
+
+  // Label du tri actif — sortColumn est SortKey (non null) dans ce bloc
+  const sortLabel = (): string | null => {
+    if (!sortColumn || !sortDirection) return null;
+    const labels: Record<SortKey, string> = { name: "Nom", city: "Ville", type: "Type" };
+    return `Trié par ${labels[sortColumn]} (${sortDirection === "asc" ? "A → Z" : "Z → A"})`;
+  };
 
   const fetchResellers = async () => {
     try {
       const data = await apiGet<Reseller[]>('/resellers');
       setResellers(data);
       setFilteredResellers(data);
+      setSortedResellers(data);
       await fetchAllResellerProducts(data);
     } catch (error) {
       console.error("Erreur chargement revendeurs:", error);
@@ -204,7 +263,7 @@ export default function ResellersPage() {
   // Export CSV
   const handleExportCSV = () => {
     exportToCSV(
-      filteredResellers,
+      sortedResellers,
       "revendeurs",
       {
         name: "Nom",
@@ -356,43 +415,8 @@ export default function ResellersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">VIto Admin</h1>
-              <p className="text-sm text-gray-500 mt-1">Gestion des Revendeurs</p>
-            </div>
-            <Link href="/">
-              <Button variant="outline">← Retour Dashboard</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* Navigation */}
-      <nav className="bg-white border-b border-gray-200">
-        <div className="px-6">
-          <div className="flex gap-6">
-            <Link href="/" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
-              Dashboard
-            </Link>
-            <Link href="/revendeurs" className="px-3 py-4 text-sm font-medium text-blue-600 border-b-2 border-blue-600">
-              Revendeurs
-            </Link>
-            <Link href="/delivery-companies" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
-              Livraisons
-            </Link>
-            <Link href="/documents" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
-              Documents
-            </Link>
-            <Link href="/promotions" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
-              Promotions
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <Header title="VIto Admin" subtitle="Gestion des Revendeurs" />
+      <Navigation />
 
       {/* Main Content */}
       <main className="p-6">
@@ -411,7 +435,7 @@ export default function ResellersPage() {
             <Button
               variant="outline"
               onClick={handleExportCSV}
-              disabled={filteredResellers.length === 0}
+              disabled={sortedResellers.length === 0}
               className="gap-2"
             >
               <Download className="w-4 h-4" />
@@ -606,9 +630,25 @@ export default function ResellersPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nom</TableHead>
-                <TableHead>Ville</TableHead>
-                <TableHead>Type</TableHead>
+                {/* Colonnes triables */}
+                {(["name", "city", "type"] as SortKey[]).map((col) => {
+                  const labels: Record<SortKey, string> = { name: "Nom", city: "Ville", type: "Type" };
+                  const isActive = sortColumn === col;
+                  return (
+                    <TableHead
+                      key={col}
+                      onClick={() => handleSort(col)}
+                      className={`cursor-pointer select-none transition-colors ${
+                        isActive ? "bg-blue-50 text-blue-700" : "hover:bg-gray-50"
+                      }`}
+                    >
+                      <span className="flex items-center gap-1">
+                        {labels[col]}
+                        <SortIcon column={col} />
+                      </span>
+                    </TableHead>
+                  );
+                })}
                 <TableHead>Produits</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead>Actif</TableHead>
@@ -676,7 +716,7 @@ export default function ResellersPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Link href={`/revendeurs/${reseller.id}`}>
+                        <Link href={`/resellers/${reseller.id}`}>
                           <Button variant="outline" size="sm" title="Horaires et produits">
                             <Clock className="w-4 h-4" />
                           </Button>
@@ -705,44 +745,52 @@ export default function ResellersPage() {
             </TableBody>
           </Table>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
-              <p className="text-sm text-gray-500">
-                Page {currentPage} sur {totalPages} —{" "}
-                {filteredResellers.length} revendeur(s)
-              </p>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+          {/* Pied de tableau : indicateur de tri + pagination */}
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 min-h-[52px]">
+            {/* Indicateur tri actif */}
+            <p className="text-xs text-gray-400 italic">
+              {sortLabel() || ""}
+            </p>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center gap-3">
+                <p className="text-sm text-gray-500">
+                  Page {currentPage} sur {totalPages} —{" "}
+                  {sortedResellers.length} revendeur(s)
+                </p>
+                <div className="flex items-center gap-1">
                   <Button
-                    key={page}
-                    variant={page === currentPage ? "default" : "outline"}
+                    variant="outline"
                     size="sm"
-                    onClick={() => setCurrentPage(page)}
-                    className="w-8"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
                   >
-                    {page}
+                    <ChevronLeft className="w-4 h-4" />
                   </Button>
-                ))}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <Button
+                      key={page}
+                      variant={page === currentPage ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(page)}
+                      className="w-8"
+                    >
+                      {page}
+                    </Button>
+                  ))}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </Card>
       </main>
     </div>

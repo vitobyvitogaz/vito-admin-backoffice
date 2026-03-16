@@ -30,6 +30,8 @@ import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { toast } from "@/lib/use-toast";
 import { uploadProductImage } from "@/lib/supabase";
 import { exportToCSV } from "@/lib/export-csv";
+import { Header } from "@/components/Header";
+import { Navigation } from "@/components/Navigation";
 
 const PAGE_SIZE = 50;
 
@@ -272,46 +274,8 @@ export default function ProductsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">VIto Admin</h1>
-              <p className="text-sm text-gray-500 mt-1">Gestion des Produits</p>
-            </div>
-            <Link href="/">
-              <Button variant="outline">← Retour Dashboard</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* Navigation */}
-      <nav className="bg-white border-b border-gray-200">
-        <div className="px-6">
-          <div className="flex gap-6">
-            <Link href="/" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
-              Dashboard
-            </Link>
-            <Link href="/resellers" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
-              Revendeurs
-            </Link>
-            <Link href="/products" className="px-3 py-4 text-sm font-medium text-blue-600 border-b-2 border-blue-600">
-              Produits
-            </Link>
-            <Link href="/delivery-companies" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
-              Livraisons
-            </Link>
-            <Link href="/documents" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
-              Documents
-            </Link>
-            <Link href="/promotions" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
-              Promotions
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <Header title="VIto Admin" subtitle="Gestion des Produits" />
+      <Navigation />
 
       {/* Main Content */}
       <main className="p-6">

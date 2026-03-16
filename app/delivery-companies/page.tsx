@@ -31,12 +31,13 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import Link from "next/link";
 import { toast } from "@/lib/use-toast";
 import { ZoneSelector } from "@/components/ZoneSelector";
 import { exportToCSV } from "@/lib/export-csv";
+import { Header } from "@/components/Header";
+import { Navigation } from "@/components/Navigation";
 
-const API_URL = 'https://vito-backend-supabase.onrender.com/api/v1';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://vito-backend-supabase.onrender.com/api/v1';
 const PAGE_SIZE = 50;
 
 interface DeliveryCompany {
@@ -377,41 +378,8 @@ export default function DeliveryCompaniesPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">VIto Admin</h1>
-              <p className="text-sm text-gray-500 mt-1">Gestion des Sociétés de Livraison</p>
-            </div>
-            <Link href="/">
-              <Button variant="outline">← Retour Dashboard</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <nav className="bg-white border-b border-gray-200">
-        <div className="px-6">
-          <div className="flex gap-6">
-            <Link href="/" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
-              Dashboard
-            </Link>
-            <Link href="/resellers" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
-              Revendeurs
-            </Link>
-            <Link href="/delivery-companies" className="px-3 py-4 text-sm font-medium text-blue-600 border-b-2 border-blue-600">
-              Livraisons
-            </Link>
-            <Link href="/documents" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
-              Documents
-            </Link>
-            <Link href="/promotions" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
-              Promotions
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <Header title="VIto Admin" subtitle="Gestion des Sociétés de Livraison" />
+      <Navigation />
 
       <main className="p-6">
         {/* Actions Bar */}
