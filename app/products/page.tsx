@@ -21,11 +21,17 @@ import {
   Search,
   Image as ImageIcon,
   Upload,
+  Download,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { toast } from "@/lib/use-toast";
 import { uploadProductImage } from "@/lib/supabase";
+import { exportToCSV } from "@/lib/export-csv";
+
+const PAGE_SIZE = 50;
 
 interface Product {
   id: string;
@@ -50,6 +56,10 @@ export default function ProductsPage() {
   const [uploading, setUploading] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [formData, setFormData] = useState({
     product_code: "",
@@ -80,7 +90,15 @@ export default function ProductsPage() {
       );
       setFilteredProducts(filtered);
     }
+    setCurrentPage(1);
   }, [searchQuery, products]);
+
+  // Données de la page courante
+  const totalPages = Math.ceil(filteredProducts.length / PAGE_SIZE);
+  const paginatedProducts = filteredProducts.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
 
   const fetchProducts = async () => {
     try {
@@ -111,8 +129,48 @@ export default function ProductsPage() {
     }
   };
 
-  const uploadImage = async (file: File): Promise<string> => {
-    return await uploadProductImage(file);
+  // Toggle is_active directement dans le tableau
+  const handleToggleActive = async (product: Product) => {
+    setTogglingId(product.id);
+    try {
+      await apiPatch(`/products/${product.id}`, { is_active: !product.is_active });
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === product.id ? { ...p, is_active: !p.is_active } : p
+        )
+      );
+      toast({
+        title: "Succès !",
+        description: `Produit ${!product.is_active ? "activé" : "désactivé"}`,
+      });
+    } catch (error) {
+      console.error("Erreur toggle:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de modifier le statut",
+        variant: "destructive",
+      });
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  // Export CSV
+  const handleExportCSV = () => {
+    exportToCSV(
+      filteredProducts,
+      "produits",
+      {
+        product_code: "Code",
+        name: "Nom",
+        category: "Catégorie",
+        price: "Prix (Ar)",
+        description: "Description",
+        is_featured: "Vedette",
+        is_active: "Actif",
+        order_position: "Position",
+      }
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -122,9 +180,8 @@ export default function ProductsPage() {
     try {
       let imageUrl = formData.image_url;
 
-      // Upload nouvelle image si sélectionnée
       if (imageFile) {
-        imageUrl = await uploadImage(imageFile);
+        imageUrl = await uploadProductImage(imageFile);
       }
 
       const payload = {
@@ -141,16 +198,10 @@ export default function ProductsPage() {
 
       if (editingId) {
         await apiPatch(`/products/${editingId}`, payload);
-        toast({
-          title: "Succès !",
-          description: "Produit modifié avec succès",
-        });
+        toast({ title: "Succès !", description: "Produit modifié avec succès" });
       } else {
         await apiPost('/products', payload);
-        toast({
-          title: "Succès !",
-          description: "Produit créé avec succès",
-        });
+        toast({ title: "Succès !", description: "Produit créé avec succès" });
       }
 
       await fetchProducts();
@@ -189,10 +240,7 @@ export default function ProductsPage() {
 
     try {
       await apiDelete(`/products/${id}`);
-      toast({
-        title: "Succès !",
-        description: "Produit supprimé",
-      });
+      toast({ title: "Succès !", description: "Produit supprimé" });
       await fetchProducts();
     } catch (error) {
       console.error("Erreur suppression:", error);
@@ -230,9 +278,7 @@ export default function ProductsPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">VIto Admin</h1>
-              <p className="text-sm text-gray-500 mt-1">
-                Gestion des Produits
-              </p>
+              <p className="text-sm text-gray-500 mt-1">Gestion des Produits</p>
             </div>
             <Link href="/">
               <Button variant="outline">← Retour Dashboard</Button>
@@ -245,40 +291,22 @@ export default function ProductsPage() {
       <nav className="bg-white border-b border-gray-200">
         <div className="px-6">
           <div className="flex gap-6">
-            <Link
-              href="/"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
+            <Link href="/" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
               Dashboard
             </Link>
-            <Link
-              href="/resellers"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
+            <Link href="/resellers" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
               Revendeurs
             </Link>
-            <Link
-              href="/products"
-              className="px-3 py-4 text-sm font-medium text-blue-600 border-b-2 border-blue-600"
-            >
+            <Link href="/products" className="px-3 py-4 text-sm font-medium text-blue-600 border-b-2 border-blue-600">
               Produits
             </Link>
-            <Link
-              href="/delivery-companies"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
+            <Link href="/delivery-companies" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
               Livraisons
             </Link>
-            <Link
-              href="/documents"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
+            <Link href="/documents" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
               Documents
             </Link>
-            <Link
-              href="/promotions"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
+            <Link href="/promotions" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
               Promotions
             </Link>
           </div>
@@ -298,10 +326,21 @@ export default function ProductsPage() {
               </p>
             </div>
           </div>
-          <Button onClick={() => setShowForm(!showForm)} className="gap-2">
-            <Plus className="w-4 h-4" />
-            {showForm ? "Annuler" : "Nouveau Produit"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={handleExportCSV}
+              disabled={filteredProducts.length === 0}
+              className="gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Exporter CSV
+            </Button>
+            <Button onClick={() => setShowForm(!showForm)} className="gap-2">
+              <Plus className="w-4 h-4" />
+              {showForm ? "Annuler" : "Nouveau Produit"}
+            </Button>
+          </div>
         </div>
 
         {/* Form */}
@@ -321,9 +360,7 @@ export default function ProductsPage() {
                       id="product_code"
                       required
                       value={formData.product_code}
-                      onChange={(e) =>
-                        setFormData({ ...formData, product_code: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, product_code: e.target.value })}
                       placeholder="B13"
                     />
                   </div>
@@ -333,9 +370,7 @@ export default function ProductsPage() {
                       id="name"
                       required
                       value={formData.name}
-                      onChange={(e) =>
-                        setFormData({ ...formData, name: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       placeholder="Bouteille 13kg"
                     />
                   </div>
@@ -344,9 +379,7 @@ export default function ProductsPage() {
                     <Input
                       id="description"
                       value={formData.description}
-                      onChange={(e) =>
-                        setFormData({ ...formData, description: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                       placeholder="Description du produit..."
                     />
                   </div>
@@ -355,9 +388,7 @@ export default function ProductsPage() {
                     <Input
                       id="category"
                       value={formData.category}
-                      onChange={(e) =>
-                        setFormData({ ...formData, category: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                       placeholder="Bouteilles"
                     />
                   </div>
@@ -368,13 +399,11 @@ export default function ProductsPage() {
                       type="number"
                       step="0.01"
                       value={formData.price}
-                      onChange={(e) =>
-                        setFormData({ ...formData, price: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                       placeholder="50000"
                     />
                   </div>
-                  
+
                   {/* Upload Image */}
                   <div className="md:col-span-2">
                     <Label htmlFor="image">Image du produit</Label>
@@ -409,9 +438,7 @@ export default function ProductsPage() {
                       id="order_position"
                       type="number"
                       value={formData.order_position}
-                      onChange={(e) =>
-                        setFormData({ ...formData, order_position: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, order_position: e.target.value })}
                     />
                   </div>
                   <div className="flex items-center gap-6 pt-6">
@@ -419,9 +446,7 @@ export default function ProductsPage() {
                       <input
                         type="checkbox"
                         checked={formData.is_featured}
-                        onChange={(e) =>
-                          setFormData({ ...formData, is_featured: e.target.checked })
-                        }
+                        onChange={(e) => setFormData({ ...formData, is_featured: e.target.checked })}
                         className="w-4 h-4"
                       />
                       <span className="text-sm">Produit mis en avant</span>
@@ -430,9 +455,7 @@ export default function ProductsPage() {
                       <input
                         type="checkbox"
                         checked={formData.is_active}
-                        onChange={(e) =>
-                          setFormData({ ...formData, is_active: e.target.checked })
-                        }
+                        onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
                         className="w-4 h-4"
                       />
                       <span className="text-sm">Produit actif</span>
@@ -476,26 +499,30 @@ export default function ProductsPage() {
                 <TableHead>Nom</TableHead>
                 <TableHead>Catégorie</TableHead>
                 <TableHead>Prix</TableHead>
-                <TableHead>Statut</TableHead>
+                <TableHead>Vedette</TableHead>
+                <TableHead>Actif</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     Chargement...
                   </TableCell>
                 </TableRow>
-              ) : filteredProducts.length === 0 ? (
+              ) : paginatedProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     Aucun produit trouvé
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredProducts.map((product) => (
-                  <TableRow key={product.id}>
+                paginatedProducts.map((product) => (
+                  <TableRow
+                    key={product.id}
+                    className={!product.is_active ? "opacity-50" : ""}
+                  >
                     <TableCell className="font-medium">
                       {product.product_code}
                     </TableCell>
@@ -514,9 +541,7 @@ export default function ProductsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {product.category || (
-                        <span className="text-gray-400">-</span>
-                      )}
+                      {product.category || <span className="text-gray-400">-</span>}
                     </TableCell>
                     <TableCell>
                       {product.price ? (
@@ -526,22 +551,30 @@ export default function ProductsPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-1">
-                        {product.is_featured && (
-                          <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">
-                            ⭐ Vedette
-                          </span>
-                        )}
-                        <span
-                          className={`px-2 py-1 text-xs rounded-full ${
-                            product.is_active
-                              ? "bg-green-100 text-green-700"
-                              : "bg-gray-100 text-gray-700"
-                          }`}
-                        >
-                          {product.is_active ? "Actif" : "Inactif"}
+                      {product.is_featured ? (
+                        <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">
+                          ⭐ Vedette
                         </span>
-                      </div>
+                      ) : (
+                        <span className="text-gray-400 text-xs">-</span>
+                      )}
+                    </TableCell>
+                    {/* Toggle is_active */}
+                    <TableCell>
+                      <button
+                        onClick={() => handleToggleActive(product)}
+                        disabled={togglingId === product.id}
+                        title={product.is_active ? "Désactiver" : "Activer"}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                          product.is_active ? "bg-green-500" : "bg-gray-300"
+                        } ${togglingId === product.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            product.is_active ? "translate-x-6" : "translate-x-1"
+                          }`}
+                        />
+                      </button>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
@@ -566,6 +599,45 @@ export default function ProductsPage() {
               )}
             </TableBody>
           </Table>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
+              <p className="text-sm text-gray-500">
+                Page {currentPage} sur {totalPages} —{" "}
+                {filteredProducts.length} produit(s)
+              </p>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <Button
+                    key={page}
+                    variant={page === currentPage ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(page)}
+                    className="w-8"
+                  >
+                    {page}
+                  </Button>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       </main>
     </div>

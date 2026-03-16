@@ -27,12 +27,17 @@ import {
   Star,
   X,
   Image as ImageIcon,
+  Download,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "@/lib/use-toast";
 import { ZoneSelector } from "@/components/ZoneSelector";
+import { exportToCSV } from "@/lib/export-csv";
 
 const API_URL = 'https://vito-backend-supabase.onrender.com/api/v1';
+const PAGE_SIZE = 50;
 
 interface DeliveryCompany {
   id: string;
@@ -66,6 +71,10 @@ export default function DeliveryCompaniesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -107,16 +116,20 @@ export default function DeliveryCompaniesPage() {
       );
       setFilteredCompanies(filtered);
     }
+    setCurrentPage(1);
   }, [searchQuery, companies]);
+
+  // Données de la page courante
+  const totalPages = Math.ceil(filteredCompanies.length / PAGE_SIZE);
+  const paginatedCompanies = filteredCompanies.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
 
   const fetchCompanies = async () => {
     try {
       const response = await fetch(`${API_URL}/delivery-companies`);
-      
-      if (!response.ok) {
-        throw new Error('Erreur lors du chargement');
-      }
-      
+      if (!response.ok) throw new Error('Erreur lors du chargement');
       const data = await response.json();
       setCompanies(data || []);
       setFilteredCompanies(data || []);
@@ -139,71 +152,89 @@ export default function DeliveryCompaniesPage() {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      toast({
-        title: "Erreur",
-        description: "Veuillez sélectionner une image (JPG, PNG, etc.)",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: "Veuillez sélectionner une image (JPG, PNG, etc.)", variant: "destructive" });
       return;
     }
-
     if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: "Erreur",
-        description: "L'image ne doit pas dépasser 5 MB",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: "L'image ne doit pas dépasser 5 MB", variant: "destructive" });
       return;
     }
 
     try {
       setUploading(true);
-
-      const formData = new FormData();
-      formData.append('file', file);
-
+      const fd = new FormData();
+      fd.append('file', file);
       const response = await fetch(`${API_URL}/delivery-companies/upload-logo`, {
         method: 'POST',
-        body: formData,
+        body: fd,
       });
-
-      if (!response.ok) {
-        throw new Error('Erreur upload');
-      }
-
+      if (!response.ok) throw new Error('Erreur upload');
       const data = await response.json();
-
-      setFormData(prev => ({
-        ...prev,
-        logo_url: data.file_url
-      }));
-
-      toast({
-        title: "Succès !",
-        description: "Logo uploadé avec succès",
-      });
-
+      setFormData((prev) => ({ ...prev, logo_url: data.file_url }));
+      toast({ title: "Succès !", description: "Logo uploadé avec succès" });
     } catch (error) {
       console.error("Erreur upload:", error);
-      toast({
-        title: "Erreur",
-        description: "Erreur lors de l'upload du logo",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: "Erreur lors de l'upload du logo", variant: "destructive" });
     } finally {
       setUploading(false);
     }
+  };
+
+  // Toggle is_active directement dans le tableau
+  const handleToggleActive = async (company: DeliveryCompany) => {
+    setTogglingId(company.id);
+    try {
+      const response = await fetch(`${API_URL}/delivery-companies/${company.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !company.is_active }),
+      });
+      if (!response.ok) throw new Error('Erreur toggle');
+      setCompanies((prev) =>
+        prev.map((c) =>
+          c.id === company.id ? { ...c, is_active: !c.is_active } : c
+        )
+      );
+      toast({
+        title: "Succès !",
+        description: `Société ${!company.is_active ? "activée" : "désactivée"}`,
+      });
+    } catch (error) {
+      console.error("Erreur toggle:", error);
+      toast({ title: "Erreur", description: "Impossible de modifier le statut", variant: "destructive" });
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  // Export CSV
+  const handleExportCSV = () => {
+    exportToCSV(
+      filteredCompanies,
+      "societes_livraison",
+      {
+        name: "Nom",
+        phone: "Téléphone",
+        whatsapp: "WhatsApp",
+        email: "Email",
+        service_areas: "Zones de service",
+        delivery_time: "Délai de livraison",
+        min_order_amount: "Montant minimum",
+        delivery_fee: "Frais de livraison",
+        working_hours: "Horaires",
+        is_verified: "Vérifiée",
+        is_active: "Active",
+        rating: "Note",
+        review_count: "Nb avis",
+      }
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (formData.service_areas.length === 0) {
-      toast({
-        title: "Erreur",
-        description: "Veuillez sélectionner au moins une zone de service",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: "Veuillez sélectionner au moins une zone de service", variant: "destructive" });
       return;
     }
 
@@ -232,18 +263,14 @@ export default function DeliveryCompaniesPage() {
       const url = editingId
         ? `${API_URL}/delivery-companies/${editingId}`
         : `${API_URL}/delivery-companies`;
-      
+
       const response = await fetch(url, {
         method: editingId ? 'PATCH' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      if (!response.ok) {
-        throw new Error('Erreur lors de la sauvegarde');
-      }
+      if (!response.ok) throw new Error('Erreur lors de la sauvegarde');
 
       toast({
         title: "Succès !",
@@ -254,11 +281,7 @@ export default function DeliveryCompaniesPage() {
       resetForm();
     } catch (error) {
       console.error("Erreur sauvegarde:", error);
-      toast({
-        title: "Erreur",
-        description: "Erreur lors de la sauvegarde",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: "Erreur lors de la sauvegarde", variant: "destructive" });
     }
   };
 
@@ -294,58 +317,35 @@ export default function DeliveryCompaniesPage() {
       const response = await fetch(`${API_URL}/delivery-companies/${id}`, {
         method: 'DELETE',
       });
-
-      if (!response.ok) {
-        throw new Error('Erreur lors de la suppression');
-      }
-
-      toast({
-        title: "Succès !",
-        description: "Société supprimée",
-      });
+      if (!response.ok) throw new Error('Erreur lors de la suppression');
+      toast({ title: "Succès !", description: "Société supprimée" });
       await fetchCompanies();
     } catch (error) {
       console.error("Erreur suppression:", error);
-      toast({
-        title: "Erreur",
-        description: "Erreur lors de la suppression",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: "Erreur lors de la suppression", variant: "destructive" });
     }
   };
 
   const addFeature = () => {
     if (featureInput.trim() && !formData.features.includes(featureInput.trim())) {
-      setFormData({
-        ...formData,
-        features: [...formData.features, featureInput.trim()],
-      });
+      setFormData({ ...formData, features: [...formData.features, featureInput.trim()] });
       setFeatureInput("");
     }
   };
 
   const removeFeature = (feature: string) => {
-    setFormData({
-      ...formData,
-      features: formData.features.filter((f) => f !== feature),
-    });
+    setFormData({ ...formData, features: formData.features.filter((f) => f !== feature) });
   };
 
   const addSpecialty = () => {
     if (specialtyInput.trim() && !formData.specialties.includes(specialtyInput.trim())) {
-      setFormData({
-        ...formData,
-        specialties: [...formData.specialties, specialtyInput.trim()],
-      });
+      setFormData({ ...formData, specialties: [...formData.specialties, specialtyInput.trim()] });
       setSpecialtyInput("");
     }
   };
 
   const removeSpecialty = (specialty: string) => {
-    setFormData({
-      ...formData,
-      specialties: formData.specialties.filter((s) => s !== specialty),
-    });
+    setFormData({ ...formData, specialties: formData.specialties.filter((s) => s !== specialty) });
   };
 
   const resetForm = () => {
@@ -382,9 +382,7 @@ export default function DeliveryCompaniesPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">VIto Admin</h1>
-              <p className="text-sm text-gray-500 mt-1">
-                Gestion des Sociétés de Livraison
-              </p>
+              <p className="text-sm text-gray-500 mt-1">Gestion des Sociétés de Livraison</p>
             </div>
             <Link href="/">
               <Button variant="outline">← Retour Dashboard</Button>
@@ -396,34 +394,19 @@ export default function DeliveryCompaniesPage() {
       <nav className="bg-white border-b border-gray-200">
         <div className="px-6">
           <div className="flex gap-6">
-            <Link
-              href="/"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
+            <Link href="/" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
               Dashboard
             </Link>
-            <Link
-              href="/resellers"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
+            <Link href="/resellers" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
               Revendeurs
             </Link>
-            <Link
-              href="/delivery-companies"
-              className="px-3 py-4 text-sm font-medium text-blue-600 border-b-2 border-blue-600"
-            >
+            <Link href="/delivery-companies" className="px-3 py-4 text-sm font-medium text-blue-600 border-b-2 border-blue-600">
               Livraisons
             </Link>
-            <Link
-              href="/documents"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
+            <Link href="/documents" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
               Documents
             </Link>
-            <Link
-              href="/promotions"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
+            <Link href="/promotions" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
               Promotions
             </Link>
           </div>
@@ -431,6 +414,7 @@ export default function DeliveryCompaniesPage() {
       </nav>
 
       <main className="p-6">
+        {/* Actions Bar */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Truck className="w-8 h-8 text-green-600" />
@@ -441,18 +425,28 @@ export default function DeliveryCompaniesPage() {
               </p>
             </div>
           </div>
-          <Button onClick={() => setShowForm(!showForm)} className="gap-2">
-            <Plus className="w-4 h-4" />
-            {showForm ? "Annuler" : "Nouvelle Société"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={handleExportCSV}
+              disabled={filteredCompanies.length === 0}
+              className="gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Exporter CSV
+            </Button>
+            <Button onClick={() => setShowForm(!showForm)} className="gap-2">
+              <Plus className="w-4 h-4" />
+              {showForm ? "Annuler" : "Nouvelle Société"}
+            </Button>
+          </div>
         </div>
 
+        {/* Form */}
         {showForm && (
           <Card className="mb-6">
             <CardHeader>
-              <CardTitle>
-                {editingId ? "Modifier la Société" : "Nouvelle Société"}
-              </CardTitle>
+              <CardTitle>{editingId ? "Modifier la Société" : "Nouvelle Société"}</CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
@@ -470,21 +464,16 @@ export default function DeliveryCompaniesPage() {
                         placeholder="Ex: Livraison Express"
                       />
                     </div>
-
                     <div className="md:col-span-2">
                       <Label htmlFor="logo">Logo de la société</Label>
                       <div className="mt-2">
                         {formData.logo_url ? (
                           <div className="space-y-2">
                             <div className="relative w-full h-48 border-2 border-gray-200 rounded-lg overflow-hidden bg-white">
-                              <img
-                                src={formData.logo_url}
-                                alt="Preview"
-                                className="w-full h-full object-contain p-4"
-                              />
+                              <img src={formData.logo_url} alt="Preview" className="w-full h-full object-contain p-4" />
                               <button
                                 type="button"
-                                onClick={() => setFormData(prev => ({ ...prev, logo_url: "" }))}
+                                onClick={() => setFormData((prev) => ({ ...prev, logo_url: "" }))}
                                 className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full hover:bg-red-600"
                               >
                                 <X className="w-4 h-4" />
@@ -502,14 +491,11 @@ export default function DeliveryCompaniesPage() {
                               disabled={uploading}
                               className="flex-1"
                             />
-                            {uploading && (
-                              <span className="text-sm text-gray-500">Upload...</span>
-                            )}
+                            {uploading && <span className="text-sm text-gray-500">Upload...</span>}
                           </div>
                         )}
                       </div>
                     </div>
-
                     <div className="md:col-span-2">
                       <Label htmlFor="description">Description</Label>
                       <Textarea
@@ -529,51 +515,23 @@ export default function DeliveryCompaniesPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="phone">Téléphone *</Label>
-                      <Input
-                        id="phone"
-                        required
-                        value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        placeholder="+261 32 00 000 00"
-                      />
+                      <Input id="phone" required value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} placeholder="+261 32 00 000 00" />
                     </div>
                     <div>
                       <Label htmlFor="whatsapp">WhatsApp</Label>
-                      <Input
-                        id="whatsapp"
-                        value={formData.whatsapp}
-                        onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
-                        placeholder="+261 32 00 000 00"
-                      />
+                      <Input id="whatsapp" value={formData.whatsapp} onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })} placeholder="+261 32 00 000 00" />
                     </div>
                     <div>
                       <Label htmlFor="messenger">Messenger</Label>
-                      <Input
-                        id="messenger"
-                        value={formData.messenger}
-                        onChange={(e) => setFormData({ ...formData, messenger: e.target.value })}
-                        placeholder="Nom sur Messenger"
-                      />
+                      <Input id="messenger" value={formData.messenger} onChange={(e) => setFormData({ ...formData, messenger: e.target.value })} placeholder="Nom sur Messenger" />
                     </div>
                     <div>
                       <Label htmlFor="email">Email</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        placeholder="contact@entreprise.mg"
-                      />
+                      <Input id="email" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="contact@entreprise.mg" />
                     </div>
                     <div className="md:col-span-2">
                       <Label htmlFor="website">Site Web</Label>
-                      <Input
-                        id="website"
-                        type="url"
-                        value={formData.website}
-                        onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                        placeholder="https://www.entreprise.mg"
-                      />
+                      <Input id="website" type="url" value={formData.website} onChange={(e) => setFormData({ ...formData, website: e.target.value })} placeholder="https://www.entreprise.mg" />
                     </div>
                   </div>
                 </div>
@@ -584,39 +542,19 @@ export default function DeliveryCompaniesPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="delivery_time">Délai de livraison</Label>
-                      <Input
-                        id="delivery_time"
-                        value={formData.delivery_time}
-                        onChange={(e) => setFormData({ ...formData, delivery_time: e.target.value })}
-                        placeholder="Ex: 24-48h"
-                      />
+                      <Input id="delivery_time" value={formData.delivery_time} onChange={(e) => setFormData({ ...formData, delivery_time: e.target.value })} placeholder="Ex: 24-48h" />
                     </div>
                     <div>
                       <Label htmlFor="min_order_amount">Montant minimum</Label>
-                      <Input
-                        id="min_order_amount"
-                        value={formData.min_order_amount}
-                        onChange={(e) => setFormData({ ...formData, min_order_amount: e.target.value })}
-                        placeholder="Ex: 50 000 Ar"
-                      />
+                      <Input id="min_order_amount" value={formData.min_order_amount} onChange={(e) => setFormData({ ...formData, min_order_amount: e.target.value })} placeholder="Ex: 50 000 Ar" />
                     </div>
                     <div>
                       <Label htmlFor="delivery_fee">Frais de livraison</Label>
-                      <Input
-                        id="delivery_fee"
-                        value={formData.delivery_fee}
-                        onChange={(e) => setFormData({ ...formData, delivery_fee: e.target.value })}
-                        placeholder="Ex: 5 000 Ar"
-                      />
+                      <Input id="delivery_fee" value={formData.delivery_fee} onChange={(e) => setFormData({ ...formData, delivery_fee: e.target.value })} placeholder="Ex: 5 000 Ar" />
                     </div>
                     <div>
                       <Label htmlFor="working_hours">Horaires</Label>
-                      <Input
-                        id="working_hours"
-                        value={formData.working_hours}
-                        onChange={(e) => setFormData({ ...formData, working_hours: e.target.value })}
-                        placeholder="Ex: Lun-Sam 8h-18h"
-                      />
+                      <Input id="working_hours" value={formData.working_hours} onChange={(e) => setFormData({ ...formData, working_hours: e.target.value })} placeholder="Ex: Lun-Sam 8h-18h" />
                     </div>
                   </div>
                 </div>
@@ -647,29 +585,17 @@ export default function DeliveryCompaniesPage() {
                           onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addFeature())}
                           placeholder="Ex: Paiement mobile"
                         />
-                        <Button type="button" onClick={addFeature} size="sm">
-                          +
-                        </Button>
+                        <Button type="button" onClick={addFeature} size="sm">+</Button>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {formData.features.map((feature, idx) => (
-                          <span
-                            key={idx}
-                            className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm flex items-center gap-2"
-                          >
+                          <span key={idx} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm flex items-center gap-2">
                             {feature}
-                            <button
-                              type="button"
-                              onClick={() => removeFeature(feature)}
-                              className="hover:text-blue-900"
-                            >
-                              ×
-                            </button>
+                            <button type="button" onClick={() => removeFeature(feature)} className="hover:text-blue-900">×</button>
                           </span>
                         ))}
                       </div>
                     </div>
-
                     <div>
                       <Label htmlFor="specialties">Spécialités</Label>
                       <div className="flex gap-2 mb-2">
@@ -680,24 +606,13 @@ export default function DeliveryCompaniesPage() {
                           onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSpecialty())}
                           placeholder="Ex: Livraison express"
                         />
-                        <Button type="button" onClick={addSpecialty} size="sm">
-                          +
-                        </Button>
+                        <Button type="button" onClick={addSpecialty} size="sm">+</Button>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {formData.specialties.map((specialty, idx) => (
-                          <span
-                            key={idx}
-                            className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm flex items-center gap-2"
-                          >
+                          <span key={idx} className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm flex items-center gap-2">
                             {specialty}
-                            <button
-                              type="button"
-                              onClick={() => removeSpecialty(specialty)}
-                              className="hover:text-green-900"
-                            >
-                              ×
-                            </button>
+                            <button type="button" onClick={() => removeSpecialty(specialty)} className="hover:text-green-900">×</button>
                           </span>
                         ))}
                       </div>
@@ -746,15 +661,14 @@ export default function DeliveryCompaniesPage() {
 
                 <div className="flex gap-3 pt-4 border-t">
                   <Button type="submit">{editingId ? "Mettre à jour" : "Créer"}</Button>
-                  <Button type="button" variant="outline" onClick={resetForm}>
-                    Annuler
-                  </Button>
+                  <Button type="button" variant="outline" onClick={resetForm}>Annuler</Button>
                 </div>
               </form>
             </CardContent>
           </Card>
         )}
 
+        {/* Search */}
         <Card className="mb-6">
           <CardContent className="pt-6">
             <div className="relative">
@@ -769,6 +683,7 @@ export default function DeliveryCompaniesPage() {
           </CardContent>
         </Card>
 
+        {/* Table */}
         <Card>
           <Table>
             <TableHeader>
@@ -780,32 +695,28 @@ export default function DeliveryCompaniesPage() {
                 <TableHead>Service</TableHead>
                 <TableHead>Statut</TableHead>
                 <TableHead>Note</TableHead>
+                <TableHead>Actif</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
-                    Chargement...
-                  </TableCell>
+                  <TableCell colSpan={9} className="text-center py-8">Chargement...</TableCell>
                 </TableRow>
-              ) : filteredCompanies.length === 0 ? (
+              ) : paginatedCompanies.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
-                    Aucune société trouvée
-                  </TableCell>
+                  <TableCell colSpan={9} className="text-center py-8">Aucune société trouvée</TableCell>
                 </TableRow>
               ) : (
-                filteredCompanies.map((company) => (
-                  <TableRow key={company.id}>
+                paginatedCompanies.map((company) => (
+                  <TableRow
+                    key={company.id}
+                    className={!company.is_active ? "opacity-50" : ""}
+                  >
                     <TableCell>
                       {company.logo_url ? (
-                        <img
-                          src={company.logo_url}
-                          alt={company.name}
-                          className="w-16 h-16 object-contain rounded-lg bg-white p-1 border"
-                        />
+                        <img src={company.logo_url} alt={company.name} className="w-16 h-16 object-contain rounded-lg bg-white p-1 border" />
                       ) : (
                         <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center">
                           <ImageIcon className="w-6 h-6 text-gray-400" />
@@ -816,9 +727,7 @@ export default function DeliveryCompaniesPage() {
                       <div className="flex flex-col">
                         <span>{company.name}</span>
                         {company.description && (
-                          <span className="text-xs text-gray-500 line-clamp-1">
-                            {company.description}
-                          </span>
+                          <span className="text-xs text-gray-500 line-clamp-1">{company.description}</span>
                         )}
                       </div>
                     </TableCell>
@@ -840,10 +749,7 @@ export default function DeliveryCompaniesPage() {
                       <div className="flex flex-wrap gap-1">
                         {company.service_areas && company.service_areas.length > 0 ? (
                           company.service_areas.slice(0, 2).map((area, idx) => (
-                            <span
-                              key={idx}
-                              className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700"
-                            >
+                            <span key={idx} className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">
                               <MapPin className="w-3 h-3 inline mr-1" />
                               {area}
                             </span>
@@ -852,9 +758,7 @@ export default function DeliveryCompaniesPage() {
                           <span className="text-gray-400 text-sm">-</span>
                         )}
                         {company.service_areas.length > 2 && (
-                          <span className="text-xs text-gray-500">
-                            +{company.service_areas.length - 2}
-                          </span>
+                          <span className="text-xs text-gray-500">+{company.service_areas.length - 2}</span>
                         )}
                       </div>
                     </TableCell>
@@ -864,6 +768,7 @@ export default function DeliveryCompaniesPage() {
                         {company.delivery_fee && <div>💰 {company.delivery_fee}</div>}
                       </div>
                     </TableCell>
+                    {/* Statut original — vérifiée + active/inactive */}
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         {company.is_verified && (
@@ -890,16 +795,29 @@ export default function DeliveryCompaniesPage() {
                         <span className="text-gray-400 text-sm">-</span>
                       )}
                     </TableCell>
+                    {/* Toggle is_active */}
+                    <TableCell>
+                      <button
+                        onClick={() => handleToggleActive(company)}
+                        disabled={togglingId === company.id}
+                        title={company.is_active ? "Désactiver" : "Activer"}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                          company.is_active ? "bg-green-500" : "bg-gray-300"
+                        } ${togglingId === company.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            company.is_active ? "translate-x-6" : "translate-x-1"
+                          }`}
+                        />
+                      </button>
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button variant="outline" size="sm" onClick={() => handleEdit(company)}>
                           <Edit className="w-4 h-4" />
                         </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDelete(company.id)}
-                        >
+                        <Button variant="destructive" size="sm" onClick={() => handleDelete(company.id)}>
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
@@ -909,6 +827,44 @@ export default function DeliveryCompaniesPage() {
               )}
             </TableBody>
           </Table>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
+              <p className="text-sm text-gray-500">
+                Page {currentPage} sur {totalPages} — {filteredCompanies.length} société(s)
+              </p>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <Button
+                    key={page}
+                    variant={page === currentPage ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(page)}
+                    className="w-8"
+                  >
+                    {page}
+                  </Button>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       </main>
     </div>

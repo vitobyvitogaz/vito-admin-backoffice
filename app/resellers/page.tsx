@@ -23,10 +23,16 @@ import {
   Phone,
   Package,
   Clock,
+  Download,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { toast } from "@/lib/use-toast";
+import { exportToCSV } from "@/lib/export-csv";
+
+const PAGE_SIZE = 50;
 
 interface Reseller {
   id: string;
@@ -64,6 +70,10 @@ export default function ResellersPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -74,6 +84,7 @@ export default function ResellersPage() {
     type: "Station Service",
     phone: "",
     whatsapp: "",
+    is_active: true,
   });
 
   useEffect(() => {
@@ -94,15 +105,22 @@ export default function ResellersPage() {
       );
       setFilteredResellers(filtered);
     }
+    // Retour à la page 1 à chaque nouvelle recherche
+    setCurrentPage(1);
   }, [searchQuery, resellers]);
+
+  // Données de la page courante
+  const totalPages = Math.ceil(filteredResellers.length / PAGE_SIZE);
+  const paginatedResellers = filteredResellers.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
 
   const fetchResellers = async () => {
     try {
       const data = await apiGet<Reseller[]>('/resellers');
       setResellers(data);
       setFilteredResellers(data);
-      
-      // Charger les produits de chaque revendeur
       await fetchAllResellerProducts(data);
     } catch (error) {
       console.error("Erreur chargement revendeurs:", error);
@@ -117,31 +135,27 @@ export default function ResellersPage() {
   };
 
   const fetchAllResellerProducts = async (resellers: Reseller[]) => {
-    // Charger tous les produits en parallèle
     const promises = resellers.map(async (reseller) => {
       try {
         const data = await apiGet<ResellerProduct[]>(`/resellers/${reseller.id}/products`);
         return { id: reseller.id, products: data };
-      } catch (error) {
-        console.error(`Erreur chargement produits pour ${reseller.name}:`, error);
+      } catch {
         return { id: reseller.id, products: [] };
       }
     });
 
     const results = await Promise.all(promises);
-    
     const productsMap: Record<string, ResellerProduct[]> = {};
-    results.forEach(result => {
+    results.forEach((result) => {
       productsMap[result.id] = result.products;
     });
-    
     setResellerProducts(productsMap);
   };
 
   const fetchProducts = async () => {
     try {
       const data = await apiGet<Product[]>('/products');
-      setProducts(data.filter(p => p.is_active));
+      setProducts(data.filter((p) => p.is_active));
     } catch (error) {
       console.error("Erreur chargement produits:", error);
       toast({
@@ -155,30 +169,72 @@ export default function ResellersPage() {
   const fetchResellerProducts = async (resellerId: string) => {
     try {
       const data = await apiGet<ResellerProduct[]>(`/resellers/${resellerId}/products`);
-      const productIds = data.map(item => item.product_id);
-      setSelectedProducts(productIds);
+      setSelectedProducts(data.map((item) => item.product_id));
     } catch (error) {
       console.error("Erreur chargement produits du revendeur:", error);
     }
+  };
+
+  // Toggle is_active directement dans le tableau
+  const handleToggleActive = async (reseller: Reseller) => {
+    setTogglingId(reseller.id);
+    try {
+      await apiPatch(`/resellers/${reseller.id}`, { is_active: !reseller.is_active });
+      setResellers((prev) =>
+        prev.map((r) =>
+          r.id === reseller.id ? { ...r, is_active: !r.is_active } : r
+        )
+      );
+      toast({
+        title: "Succès !",
+        description: `Revendeur ${!reseller.is_active ? "activé" : "désactivé"}`,
+      });
+    } catch (error) {
+      console.error("Erreur toggle:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de modifier le statut",
+        variant: "destructive",
+      });
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  // Export CSV
+  const handleExportCSV = () => {
+    exportToCSV(
+      filteredResellers,
+      "revendeurs",
+      {
+        name: "Nom",
+        city: "Ville",
+        address: "Adresse",
+        type: "Type",
+        phone: "Téléphone",
+        whatsapp: "WhatsApp",
+        latitude: "Latitude",
+        longitude: "Longitude",
+        is_active: "Actif",
+      }
+    );
   };
 
   const getCategoryBadges = (resellerId: string) => {
     const products = resellerProducts[resellerId] || [];
     if (products.length === 0) return null;
 
-    // Grouper par catégorie
     const categoryGroups: Record<string, number> = {};
-    products.forEach(item => {
+    products.forEach((item) => {
       const category = item.products.category;
       categoryGroups[category] = (categoryGroups[category] || 0) + 1;
     });
 
-    // Couleurs par catégorie
     const categoryColors: Record<string, string> = {
-      'Bouteilles': 'bg-blue-100 text-blue-700',
-      'Accessoires': 'bg-green-100 text-green-700',
-      'Kit': 'bg-purple-100 text-purple-700',
-      'Gaz au détail': 'bg-orange-100 text-orange-700',
+      Bouteilles: "bg-blue-100 text-blue-700",
+      Accessoires: "bg-green-100 text-green-700",
+      Kit: "bg-purple-100 text-purple-700",
+      "Gaz au détail": "bg-orange-100 text-orange-700",
     };
 
     return (
@@ -187,7 +243,7 @@ export default function ResellersPage() {
           <span
             key={category}
             className={`px-2 py-1 text-xs rounded-full ${
-              categoryColors[category] || 'bg-gray-100 text-gray-700'
+              categoryColors[category] || "bg-gray-100 text-gray-700"
             }`}
           >
             {category} ({count})
@@ -206,35 +262,27 @@ export default function ResellersPage() {
       longitude: parseFloat(formData.longitude),
       whatsapp: formData.whatsapp || null,
       services: {},
-      is_active: true,
       is_verified: true,
     };
 
     try {
       let resellerId = editingId;
-      
+
       if (editingId) {
         await apiPatch(`/resellers/${editingId}`, payload);
-        toast({
-          title: "Succès !",
-          description: "Revendeur modifié avec succès",
-        });
+        toast({ title: "Succès !", description: "Revendeur modifié avec succès" });
       } else {
         const newReseller = await apiPost<Reseller>('/resellers', payload);
         resellerId = newReseller.id;
-        toast({
-          title: "Succès !",
-          description: "Revendeur créé avec succès",
+        toast({ title: "Succès !", description: "Revendeur créé avec succès" });
+      }
+
+      if (resellerId) {
+        await apiPost(`/resellers/${resellerId}/products`, {
+          productIds: selectedProducts,
         });
       }
 
-      // Sauvegarder les produits
-      if (resellerId) {
-        await apiPost(`/resellers/${resellerId}/products`, {
-          productIds: selectedProducts
-        });
-      }
-      
       await fetchResellers();
       resetForm();
     } catch (error) {
@@ -257,11 +305,10 @@ export default function ResellersPage() {
       type: reseller.type,
       phone: reseller.phone,
       whatsapp: reseller.whatsapp || "",
+      is_active: reseller.is_active,
     });
     setEditingId(reseller.id);
     setShowForm(true);
-    
-    // Charger les produits du revendeur
     await fetchResellerProducts(reseller.id);
   };
 
@@ -270,10 +317,7 @@ export default function ResellersPage() {
 
     try {
       await apiDelete(`/resellers/${id}`);
-      toast({
-        title: "Succès !",
-        description: "Revendeur supprimé",
-      });
+      toast({ title: "Succès !", description: "Revendeur supprimé" });
       await fetchResellers();
     } catch (error) {
       console.error("Erreur suppression:", error);
@@ -286,9 +330,9 @@ export default function ResellersPage() {
   };
 
   const toggleProduct = (productId: string) => {
-    setSelectedProducts(prev =>
+    setSelectedProducts((prev) =>
       prev.includes(productId)
-        ? prev.filter(id => id !== productId)
+        ? prev.filter((id) => id !== productId)
         : [...prev, productId]
     );
   };
@@ -303,6 +347,7 @@ export default function ResellersPage() {
       type: "Station Service",
       phone: "",
       whatsapp: "",
+      is_active: true,
     });
     setEditingId(null);
     setShowForm(false);
@@ -317,9 +362,7 @@ export default function ResellersPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">VIto Admin</h1>
-              <p className="text-sm text-gray-500 mt-1">
-                Gestion des Revendeurs
-              </p>
+              <p className="text-sm text-gray-500 mt-1">Gestion des Revendeurs</p>
             </div>
             <Link href="/">
               <Button variant="outline">← Retour Dashboard</Button>
@@ -332,34 +375,19 @@ export default function ResellersPage() {
       <nav className="bg-white border-b border-gray-200">
         <div className="px-6">
           <div className="flex gap-6">
-            <Link
-              href="/"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
+            <Link href="/" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
               Dashboard
             </Link>
-            <Link
-              href="/revendeurs"
-              className="px-3 py-4 text-sm font-medium text-blue-600 border-b-2 border-blue-600"
-            >
+            <Link href="/revendeurs" className="px-3 py-4 text-sm font-medium text-blue-600 border-b-2 border-blue-600">
               Revendeurs
             </Link>
-            <Link
-              href="/delivery-companies"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
+            <Link href="/delivery-companies" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
               Livraisons
             </Link>
-            <Link
-              href="/documents"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
+            <Link href="/documents" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
               Documents
             </Link>
-            <Link
-              href="/promotions"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
+            <Link href="/promotions" className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300">
               Promotions
             </Link>
           </div>
@@ -379,10 +407,21 @@ export default function ResellersPage() {
               </p>
             </div>
           </div>
-          <Button onClick={() => setShowForm(!showForm)} className="gap-2">
-            <Plus className="w-4 h-4" />
-            {showForm ? "Annuler" : "Nouveau Revendeur"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={handleExportCSV}
+              disabled={filteredResellers.length === 0}
+              className="gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Exporter CSV
+            </Button>
+            <Button onClick={() => setShowForm(!showForm)} className="gap-2">
+              <Plus className="w-4 h-4" />
+              {showForm ? "Annuler" : "Nouveau Revendeur"}
+            </Button>
+          </div>
         </div>
 
         {/* Form */}
@@ -405,9 +444,7 @@ export default function ResellersPage() {
                         id="name"
                         required
                         value={formData.name}
-                        onChange={(e) =>
-                          setFormData({ ...formData, name: e.target.value })
-                        }
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       />
                     </div>
                     <div>
@@ -416,9 +453,7 @@ export default function ResellersPage() {
                         id="city"
                         required
                         value={formData.city}
-                        onChange={(e) =>
-                          setFormData({ ...formData, city: e.target.value })
-                        }
+                        onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                       />
                     </div>
                     <div className="md:col-span-2">
@@ -427,9 +462,7 @@ export default function ResellersPage() {
                         id="address"
                         required
                         value={formData.address}
-                        onChange={(e) =>
-                          setFormData({ ...formData, address: e.target.value })
-                        }
+                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                       />
                     </div>
                     <div>
@@ -440,9 +473,7 @@ export default function ResellersPage() {
                         step="any"
                         required
                         value={formData.latitude}
-                        onChange={(e) =>
-                          setFormData({ ...formData, latitude: e.target.value })
-                        }
+                        onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
                         placeholder="-18.8792"
                       />
                     </div>
@@ -454,12 +485,7 @@ export default function ResellersPage() {
                         step="any"
                         required
                         value={formData.longitude}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            longitude: e.target.value,
-                          })
-                        }
+                        onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
                         placeholder="47.5079"
                       />
                     </div>
@@ -469,9 +495,7 @@ export default function ResellersPage() {
                         id="type"
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                         value={formData.type}
-                        onChange={(e) =>
-                          setFormData({ ...formData, type: e.target.value })
-                        }
+                        onChange={(e) => setFormData({ ...formData, type: e.target.value })}
                       >
                         <option value="Station Service">Station Service</option>
                         <option value="Épicerie">Épicerie</option>
@@ -486,9 +510,7 @@ export default function ResellersPage() {
                         id="phone"
                         required
                         value={formData.phone}
-                        onChange={(e) =>
-                          setFormData({ ...formData, phone: e.target.value })
-                        }
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         placeholder="+261 32 00 00 001"
                       />
                     </div>
@@ -497,11 +519,21 @@ export default function ResellersPage() {
                       <Input
                         id="whatsapp"
                         value={formData.whatsapp}
-                        onChange={(e) =>
-                          setFormData({ ...formData, whatsapp: e.target.value })
-                        }
+                        onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
                         placeholder="+261 32 00 00 001"
                       />
+                    </div>
+                    {/* Statut actif dans le formulaire */}
+                    <div className="flex items-end">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={formData.is_active}
+                          onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                          className="w-4 h-4"
+                        />
+                        <span className="text-sm font-medium">Revendeur actif</span>
+                      </label>
                     </div>
                   </div>
                 </div>
@@ -512,10 +544,9 @@ export default function ResellersPage() {
                     <Package className="w-5 h-5 text-blue-600" />
                     <h3 className="text-lg font-semibold">Produits vendus</h3>
                     <span className="text-sm text-gray-500">
-                      ({selectedProducts.length} sélectionné{selectedProducts.length > 1 ? 's' : ''})
+                      ({selectedProducts.length} sélectionné{selectedProducts.length > 1 ? "s" : ""})
                     </span>
                   </div>
-                  
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                     {products.map((product) => (
                       <div
@@ -523,16 +554,14 @@ export default function ResellersPage() {
                         onClick={() => toggleProduct(product.id)}
                         className={`p-3 border rounded-lg cursor-pointer transition-all ${
                           selectedProducts.includes(product.id)
-                            ? 'border-blue-600 bg-blue-50'
-                            : 'border-gray-200 hover:border-gray-300'
+                            ? "border-blue-600 bg-blue-50"
+                            : "border-gray-200 hover:border-gray-300"
                         }`}
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <p className="font-medium text-sm">{product.name}</p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {product.category}
-                            </p>
+                            <p className="text-xs text-gray-500 mt-1">{product.category}</p>
                           </div>
                           <input
                             type="checkbox"
@@ -547,9 +576,7 @@ export default function ResellersPage() {
                 </div>
 
                 <div className="flex gap-3">
-                  <Button type="submit">
-                    {editingId ? "Mettre à jour" : "Créer"}
-                  </Button>
+                  <Button type="submit">{editingId ? "Mettre à jour" : "Créer"}</Button>
                   <Button type="button" variant="outline" onClick={resetForm}>
                     Annuler
                   </Button>
@@ -584,28 +611,30 @@ export default function ResellersPage() {
                 <TableHead>Type</TableHead>
                 <TableHead>Produits</TableHead>
                 <TableHead>Contact</TableHead>
+                <TableHead>Actif</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     Chargement...
                   </TableCell>
                 </TableRow>
-              ) : filteredResellers.length === 0 ? (
+              ) : paginatedResellers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     Aucun revendeur trouvé
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredResellers.map((reseller) => (
-                  <TableRow key={reseller.id}>
-                    <TableCell className="font-medium">
-                      {reseller.name}
-                    </TableCell>
+                paginatedResellers.map((reseller) => (
+                  <TableRow
+                    key={reseller.id}
+                    className={!reseller.is_active ? "opacity-50" : ""}
+                  >
+                    <TableCell className="font-medium">{reseller.name}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
                         <MapPin className="w-4 h-4 text-gray-400" />
@@ -628,14 +657,27 @@ export default function ResellersPage() {
                         {reseller.phone}
                       </div>
                     </TableCell>
+                    {/* Toggle is_active */}
+                    <TableCell>
+                      <button
+                        onClick={() => handleToggleActive(reseller)}
+                        disabled={togglingId === reseller.id}
+                        title={reseller.is_active ? "Désactiver" : "Activer"}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                          reseller.is_active ? "bg-green-500" : "bg-gray-300"
+                        } ${togglingId === reseller.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            reseller.is_active ? "translate-x-6" : "translate-x-1"
+                          }`}
+                        />
+                      </button>
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Link href={`/revendeurs/${reseller.id}`}>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            title="Horaires et produits"
-                          >
+                          <Button variant="outline" size="sm" title="Horaires et produits">
                             <Clock className="w-4 h-4" />
                           </Button>
                         </Link>
@@ -662,6 +704,45 @@ export default function ResellersPage() {
               )}
             </TableBody>
           </Table>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
+              <p className="text-sm text-gray-500">
+                Page {currentPage} sur {totalPages} —{" "}
+                {filteredResellers.length} revendeur(s)
+              </p>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <Button
+                    key={page}
+                    variant={page === currentPage ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(page)}
+                    className="w-8"
+                  >
+                    {page}
+                  </Button>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       </main>
     </div>
