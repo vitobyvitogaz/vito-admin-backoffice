@@ -35,7 +35,7 @@ export function Header({ subtitle }: HeaderProps) {
             {/* Logo */}
             <div className="flex items-center gap-3">
               <Image
-                src="/vito-logo-dark.png"
+                src="/logo-vito-dark.png"
                 alt="VitoByVitogaz"
                 width={120}
                 height={40}
