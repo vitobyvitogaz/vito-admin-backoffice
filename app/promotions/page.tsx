@@ -20,9 +20,7 @@ import {
   Edit,
   Trash2,
   Search,
-  Calendar,
   Percent,
-  Upload,
   X,
   Image as ImageIcon,
   ArrowUpDown,
@@ -71,6 +69,7 @@ export default function PromotionsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   // Tri
   const [sortColumn, setSortColumn] = useState<SortKey | null>(null);
@@ -322,6 +321,28 @@ export default function PromotionsPage() {
     }
   };
 
+  // Toggle is_active directement dans le tableau
+  const handleToggleActive = async (promo: Promotion) => {
+    setTogglingId(promo.id);
+    try {
+      await apiPatch(`/promotions/${promo.id}`, { is_active: !promo.is_active });
+      setPromotions((prev) =>
+        prev.map((p) =>
+          p.id === promo.id ? { ...p, is_active: !p.is_active } : p
+        )
+      );
+      toast({
+        title: "Succès !",
+        description: `Promotion ${!promo.is_active ? "activée" : "désactivée"}`,
+      });
+    } catch (error) {
+      console.error("Erreur toggle:", error);
+      toast({ title: "Erreur", description: "Impossible de modifier le statut", variant: "destructive" });
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       title: "", subtitle: "", description: "", discount_value: "", discount_type: "percentage",
@@ -335,6 +356,7 @@ export default function PromotionsPage() {
     setNewCondition("");
   };
 
+  // Statut calculé (date + is_active)
   const isActive = (promo: Promotion) => {
     try {
       const now = new Date();
@@ -394,7 +416,6 @@ export default function PromotionsPage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
-                {/* SECTION 1: Informations générales */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold border-b pb-2">Informations générales</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -434,7 +455,6 @@ export default function PromotionsPage() {
                   </div>
                 </div>
 
-                {/* SECTION 2: Réduction */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold border-b pb-2">Réduction</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -469,7 +489,6 @@ export default function PromotionsPage() {
                   </div>
                 </div>
 
-                {/* SECTION 3: Validité */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold border-b pb-2">Période de validité</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -484,13 +503,11 @@ export default function PromotionsPage() {
                   </div>
                 </div>
 
-                {/* SECTION 4: Zones */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold border-b pb-2">Zones concernées</h3>
                   <ZoneSelector selectedZones={formData.zones} onChange={(zones) => setFormData({ ...formData, zones })} label="Zones concernées" required placeholder="Sélectionner les zones..." />
                 </div>
 
-                {/* SECTION 5: Produits applicables */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold border-b pb-2">Produits applicables</h3>
                   <div className="space-y-2">
@@ -509,7 +526,6 @@ export default function PromotionsPage() {
                   </div>
                 </div>
 
-                {/* SECTION 6: Conditions */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold border-b pb-2">Conditions d'application</h3>
                   <div className="space-y-2">
@@ -528,7 +544,6 @@ export default function PromotionsPage() {
                   </div>
                 </div>
 
-                {/* SECTION 7: Paramètres */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold border-b pb-2">Paramètres</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -577,8 +592,7 @@ export default function PromotionsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-16">Image</TableHead>
-                {/* Colonnes triables */}
+                <TableHead className="w-14">Image</TableHead>
                 {sortableCols.map((col) => {
                   const isColActive = sortColumn === col.key;
                   return (
@@ -595,19 +609,21 @@ export default function PromotionsPage() {
                     </TableHead>
                   );
                 })}
-                {/* Code — non triable */}
                 <TableHead>Code</TableHead>
+                {/* Colonne toggle Actif */}
+                <TableHead>Activer</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={9} className="text-center py-8">Chargement...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={10} className="text-center py-8">Chargement...</TableCell></TableRow>
               ) : sortedPromotions.length === 0 ? (
-                <TableRow><TableCell colSpan={9} className="text-center py-8">Aucune promotion trouvée</TableCell></TableRow>
+                <TableRow><TableCell colSpan={10} className="text-center py-8">Aucune promotion trouvée</TableCell></TableRow>
               ) : (
                 sortedPromotions.map((promo) => (
-                  <TableRow key={promo.id} className={!isActive(promo) ? "opacity-60" : ""}>
+                  // Plus d'opacity-60 — toutes les promos visibles à plein
+                  <TableRow key={promo.id}>
                     {/* Image */}
                     <TableCell>
                       {promo.image_url ? (
@@ -632,12 +648,12 @@ export default function PromotionsPage() {
                           : `${promo.discount_value} Ar`}
                       </div>
                     </TableCell>
-                    {/* Validité — sans icône Calendar inline */}
+                    {/* Validité */}
                     <TableCell className="text-xs text-gray-600">
                       <div>{formatDate(promo.valid_from)}</div>
                       <div className="text-gray-400">→ {formatDate(promo.valid_until)}</div>
                     </TableCell>
-                    {/* Zones — sans icône MapPin */}
+                    {/* Zones */}
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {promo.zones && promo.zones.length > 0 ? (
@@ -656,14 +672,14 @@ export default function PromotionsPage() {
                         )}
                       </div>
                     </TableCell>
-                    {/* Utilisations — sans icône TrendingUp */}
+                    {/* Utilisations */}
                     <TableCell className="text-sm">
                       <span className="font-medium">{promo.usage_count || 0}</span>
                       {promo.max_usage && (
                         <span className="text-xs text-gray-400"> / {promo.max_usage}</span>
                       )}
                     </TableCell>
-                    {/* Statut */}
+                    {/* Statut — calculé (date + is_active) */}
                     <TableCell>
                       {isActive(promo) ? (
                         <span className="px-2 py-1 text-xs rounded-full font-semibold" style={{ backgroundColor: "#e6f4f3", color: VITOGAZ_GREEN }}>
@@ -683,6 +699,23 @@ export default function PromotionsPage() {
                         <span className="text-gray-400 text-xs">-</span>
                       )}
                     </TableCell>
+                    {/* Toggle is_active */}
+                    <TableCell>
+                      <button
+                        onClick={() => handleToggleActive(promo)}
+                        disabled={togglingId === promo.id}
+                        title={promo.is_active ? "Désactiver" : "Activer"}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                          togglingId === promo.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                        }`}
+                        style={{ backgroundColor: promo.is_active ? VITOGAZ_GREEN : "#D1D5DB" }}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          promo.is_active ? "translate-x-6" : "translate-x-1"
+                        }`} />
+                      </button>
+                    </TableCell>
+                    {/* Actions */}
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button variant="outline" size="sm" onClick={() => handleEdit(promo)}><Edit className="w-4 h-4" /></Button>
