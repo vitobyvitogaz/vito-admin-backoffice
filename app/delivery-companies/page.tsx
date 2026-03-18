@@ -20,16 +20,16 @@ import {
   Edit,
   Trash2,
   Search,
-  Phone,
-  MapPin,
   CheckCircle,
-  XCircle,
   Star,
   X,
   Image as ImageIcon,
   Download,
   ChevronLeft,
   ChevronRight,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { toast } from "@/lib/use-toast";
 import { ZoneSelector } from "@/components/ZoneSelector";
@@ -39,6 +39,9 @@ import { Navigation } from "@/components/Navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://vito-backend-supabase.onrender.com/api/v1';
 const PAGE_SIZE = 50;
+const VITOGAZ_GREEN = "#008B7F";
+
+type SortKey = "name" | "zones" | "rating" | "is_active";
 
 interface DeliveryCompany {
   id: string;
@@ -67,12 +70,17 @@ interface DeliveryCompany {
 export default function DeliveryCompaniesPage() {
   const [companies, setCompanies] = useState<DeliveryCompany[]>([]);
   const [filteredCompanies, setFilteredCompanies] = useState<DeliveryCompany[]>([]);
+  const [sortedCompanies, setSortedCompanies] = useState<DeliveryCompany[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  // Tri
+  const [sortColumn, setSortColumn] = useState<SortKey | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -101,9 +109,7 @@ export default function DeliveryCompaniesPage() {
   const [featureInput, setFeatureInput] = useState("");
   const [specialtyInput, setSpecialtyInput] = useState("");
 
-  useEffect(() => {
-    fetchCompanies();
-  }, []);
+  useEffect(() => { fetchCompanies(); }, []);
 
   useEffect(() => {
     if (searchQuery.trim() === "") {
@@ -120,12 +126,73 @@ export default function DeliveryCompaniesPage() {
     setCurrentPage(1);
   }, [searchQuery, companies]);
 
+  // Tri appliqué après filtre
+  useEffect(() => {
+    if (!sortColumn || !sortDirection) {
+      setSortedCompanies(filteredCompanies);
+      return;
+    }
+    const col = sortColumn;
+    const dir = sortDirection;
+    const sorted = [...filteredCompanies].sort((a, b) => {
+      if (col === "name") {
+        const valA = a.name.toLowerCase();
+        const valB = b.name.toLowerCase();
+        if (valA < valB) return dir === "asc" ? -1 : 1;
+        if (valA > valB) return dir === "asc" ? 1 : -1;
+        return 0;
+      }
+      if (col === "zones") {
+        return dir === "asc"
+          ? a.service_areas.length - b.service_areas.length
+          : b.service_areas.length - a.service_areas.length;
+      }
+      if (col === "rating") {
+        return dir === "asc" ? a.rating - b.rating : b.rating - a.rating;
+      }
+      if (col === "is_active") {
+        const valA = a.is_active ? 1 : 0;
+        const valB = b.is_active ? 1 : 0;
+        return dir === "asc" ? valA - valB : valB - valA;
+      }
+      return 0;
+    });
+    setSortedCompanies(sorted);
+    setCurrentPage(1);
+  }, [filteredCompanies, sortColumn, sortDirection]);
+
   // Données de la page courante
-  const totalPages = Math.ceil(filteredCompanies.length / PAGE_SIZE);
-  const paginatedCompanies = filteredCompanies.slice(
+  const totalPages = Math.ceil(sortedCompanies.length / PAGE_SIZE);
+  const paginatedCompanies = sortedCompanies.slice(
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE
   );
+
+  const handleSort = (column: SortKey) => {
+    if (sortColumn !== column) {
+      setSortColumn(column);
+      setSortDirection("asc");
+    } else if (sortDirection === "asc") {
+      setSortDirection("desc");
+    } else {
+      setSortColumn(null);
+      setSortDirection(null);
+    }
+  };
+
+  const SortIcon = ({ column }: { column: SortKey }) => {
+    if (sortColumn !== column) return <ArrowUpDown className="w-3.5 h-3.5 text-gray-400 ml-1 inline" />;
+    if (sortDirection === "asc") return <ArrowUp className="w-3.5 h-3.5 ml-1 inline" style={{ color: VITOGAZ_GREEN }} />;
+    return <ArrowDown className="w-3.5 h-3.5 ml-1 inline" style={{ color: VITOGAZ_GREEN }} />;
+  };
+
+  const sortLabel = (): string | null => {
+    if (!sortColumn || !sortDirection) return null;
+    if (sortColumn === "is_active") return `Trié par Actif (${sortDirection === "desc" ? "Actifs en premier" : "Inactifs en premier"})`;
+    if (sortColumn === "zones") return `Trié par Zones (${sortDirection === "desc" ? "Plus de zones" : "Moins de zones"})`;
+    if (sortColumn === "rating") return `Trié par Note (${sortDirection === "desc" ? "Meilleures notes" : "Notes croissantes"})`;
+    return `Trié par Nom (${sortDirection === "asc" ? "A → Z" : "Z → A"})`;
+  };
 
   const fetchCompanies = async () => {
     try {
@@ -134,15 +201,13 @@ export default function DeliveryCompaniesPage() {
       const data = await response.json();
       setCompanies(data || []);
       setFilteredCompanies(data || []);
+      setSortedCompanies(data || []);
     } catch (error) {
       console.error("Erreur chargement:", error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger les sociétés de livraison",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: "Impossible de charger les sociétés de livraison", variant: "destructive" });
       setCompanies([]);
       setFilteredCompanies([]);
+      setSortedCompanies([]);
     } finally {
       setLoading(false);
     }
@@ -151,7 +216,6 @@ export default function DeliveryCompaniesPage() {
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     if (!file.type.startsWith('image/')) {
       toast({ title: "Erreur", description: "Veuillez sélectionner une image (JPG, PNG, etc.)", variant: "destructive" });
       return;
@@ -160,15 +224,11 @@ export default function DeliveryCompaniesPage() {
       toast({ title: "Erreur", description: "L'image ne doit pas dépasser 5 MB", variant: "destructive" });
       return;
     }
-
     try {
       setUploading(true);
       const fd = new FormData();
       fd.append('file', file);
-      const response = await fetch(`${API_URL}/delivery-companies/upload-logo`, {
-        method: 'POST',
-        body: fd,
-      });
+      const response = await fetch(`${API_URL}/delivery-companies/upload-logo`, { method: 'POST', body: fd });
       if (!response.ok) throw new Error('Erreur upload');
       const data = await response.json();
       setFormData((prev) => ({ ...prev, logo_url: data.file_url }));
@@ -181,7 +241,6 @@ export default function DeliveryCompaniesPage() {
     }
   };
 
-  // Toggle is_active directement dans le tableau
   const handleToggleActive = async (company: DeliveryCompany) => {
     setTogglingId(company.id);
     try {
@@ -192,14 +251,9 @@ export default function DeliveryCompaniesPage() {
       });
       if (!response.ok) throw new Error('Erreur toggle');
       setCompanies((prev) =>
-        prev.map((c) =>
-          c.id === company.id ? { ...c, is_active: !c.is_active } : c
-        )
+        prev.map((c) => c.id === company.id ? { ...c, is_active: !c.is_active } : c)
       );
-      toast({
-        title: "Succès !",
-        description: `Société ${!company.is_active ? "activée" : "désactivée"}`,
-      });
+      toast({ title: "Succès !", description: `Société ${!company.is_active ? "activée" : "désactivée"}` });
     } catch (error) {
       console.error("Erreur toggle:", error);
       toast({ title: "Erreur", description: "Impossible de modifier le statut", variant: "destructive" });
@@ -208,76 +262,41 @@ export default function DeliveryCompaniesPage() {
     }
   };
 
-  // Export CSV
   const handleExportCSV = () => {
-    exportToCSV(
-      filteredCompanies,
-      "societes_livraison",
-      {
-        name: "Nom",
-        phone: "Téléphone",
-        whatsapp: "WhatsApp",
-        email: "Email",
-        service_areas: "Zones de service",
-        delivery_time: "Délai de livraison",
-        min_order_amount: "Montant minimum",
-        delivery_fee: "Frais de livraison",
-        working_hours: "Horaires",
-        is_verified: "Vérifiée",
-        is_active: "Active",
-        rating: "Note",
-        review_count: "Nb avis",
-      }
-    );
+    exportToCSV(sortedCompanies, "societes_livraison", {
+      name: "Nom", phone: "Téléphone", whatsapp: "WhatsApp", email: "Email",
+      service_areas: "Zones de service", delivery_time: "Délai de livraison",
+      min_order_amount: "Montant minimum", delivery_fee: "Frais de livraison",
+      working_hours: "Horaires", is_verified: "Vérifiée", is_active: "Active",
+      rating: "Note", review_count: "Nb avis",
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (formData.service_areas.length === 0) {
       toast({ title: "Erreur", description: "Veuillez sélectionner au moins une zone de service", variant: "destructive" });
       return;
     }
-
     const payload = {
-      name: formData.name,
-      logo_url: formData.logo_url || null,
-      description: formData.description || null,
-      phone: formData.phone,
-      whatsapp: formData.whatsapp || null,
-      messenger: formData.messenger || null,
-      email: formData.email || null,
-      website: formData.website || null,
-      service_areas: formData.service_areas,
-      delivery_time: formData.delivery_time || null,
-      min_order_amount: formData.min_order_amount || null,
-      delivery_fee: formData.delivery_fee || null,
-      working_hours: formData.working_hours || null,
-      features: formData.features,
-      specialties: formData.specialties,
-      is_verified: formData.is_verified,
-      is_active: formData.is_active,
-      display_order: Number(formData.display_order) || 0,
+      name: formData.name, logo_url: formData.logo_url || null, description: formData.description || null,
+      phone: formData.phone, whatsapp: formData.whatsapp || null, messenger: formData.messenger || null,
+      email: formData.email || null, website: formData.website || null,
+      service_areas: formData.service_areas, delivery_time: formData.delivery_time || null,
+      min_order_amount: formData.min_order_amount || null, delivery_fee: formData.delivery_fee || null,
+      working_hours: formData.working_hours || null, features: formData.features,
+      specialties: formData.specialties, is_verified: formData.is_verified,
+      is_active: formData.is_active, display_order: Number(formData.display_order) || 0,
     };
-
     try {
-      const url = editingId
-        ? `${API_URL}/delivery-companies/${editingId}`
-        : `${API_URL}/delivery-companies`;
-
+      const url = editingId ? `${API_URL}/delivery-companies/${editingId}` : `${API_URL}/delivery-companies`;
       const response = await fetch(url, {
         method: editingId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-
       if (!response.ok) throw new Error('Erreur lors de la sauvegarde');
-
-      toast({
-        title: "Succès !",
-        description: editingId ? "Société modifiée avec succès" : "Société créée avec succès",
-      });
-
+      toast({ title: "Succès !", description: editingId ? "Société modifiée avec succès" : "Société créée avec succès" });
       await fetchCompanies();
       resetForm();
     } catch (error) {
@@ -288,24 +307,14 @@ export default function DeliveryCompaniesPage() {
 
   const handleEdit = (company: DeliveryCompany) => {
     setFormData({
-      name: company.name,
-      logo_url: company.logo_url || "",
-      description: company.description || "",
-      phone: company.phone,
-      whatsapp: company.whatsapp || "",
-      messenger: company.messenger || "",
-      email: company.email || "",
-      website: company.website || "",
-      service_areas: company.service_areas || [],
-      delivery_time: company.delivery_time || "",
-      min_order_amount: company.min_order_amount || "",
-      delivery_fee: company.delivery_fee || "",
-      working_hours: company.working_hours || "",
-      features: company.features || [],
-      specialties: company.specialties || [],
-      is_verified: company.is_verified,
-      is_active: company.is_active,
-      display_order: company.display_order,
+      name: company.name, logo_url: company.logo_url || "", description: company.description || "",
+      phone: company.phone, whatsapp: company.whatsapp || "", messenger: company.messenger || "",
+      email: company.email || "", website: company.website || "",
+      service_areas: company.service_areas || [], delivery_time: company.delivery_time || "",
+      min_order_amount: company.min_order_amount || "", delivery_fee: company.delivery_fee || "",
+      working_hours: company.working_hours || "", features: company.features || [],
+      specialties: company.specialties || [], is_verified: company.is_verified,
+      is_active: company.is_active, display_order: company.display_order,
     });
     setEditingId(company.id);
     setShowForm(true);
@@ -313,11 +322,8 @@ export default function DeliveryCompaniesPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Êtes-vous sûr de vouloir supprimer cette société ?")) return;
-
     try {
-      const response = await fetch(`${API_URL}/delivery-companies/${id}`, {
-        method: 'DELETE',
-      });
+      const response = await fetch(`${API_URL}/delivery-companies/${id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('Erreur lors de la suppression');
       toast({ title: "Succès !", description: "Société supprimée" });
       await fetchCompanies();
@@ -351,24 +357,10 @@ export default function DeliveryCompaniesPage() {
 
   const resetForm = () => {
     setFormData({
-      name: "",
-      logo_url: "",
-      description: "",
-      phone: "",
-      whatsapp: "",
-      messenger: "",
-      email: "",
-      website: "",
-      service_areas: [],
-      delivery_time: "",
-      min_order_amount: "",
-      delivery_fee: "",
-      working_hours: "",
-      features: [],
-      specialties: [],
-      is_verified: false,
-      is_active: true,
-      display_order: 0,
+      name: "", logo_url: "", description: "", phone: "", whatsapp: "", messenger: "",
+      email: "", website: "", service_areas: [], delivery_time: "", min_order_amount: "",
+      delivery_fee: "", working_hours: "", features: [], specialties: [],
+      is_verified: false, is_active: true, display_order: 0,
     });
     setFeatureInput("");
     setSpecialtyInput("");
@@ -385,25 +377,18 @@ export default function DeliveryCompaniesPage() {
         {/* Actions Bar */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Truck className="w-8 h-8 text-green-600" />
+            <Truck className="w-8 h-8" style={{ color: VITOGAZ_GREEN }} />
             <div>
               <h2 className="text-2xl font-bold">Sociétés de Livraison</h2>
-              <p className="text-sm text-gray-500">
-                {companies.length} société(s) au total
-              </p>
+              <p className="text-sm text-gray-500">{companies.length} société(s) au total</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={handleExportCSV}
-              disabled={filteredCompanies.length === 0}
-              className="gap-2"
-            >
+            <Button variant="outline" onClick={handleExportCSV} disabled={sortedCompanies.length === 0} className="gap-2">
               <Download className="w-4 h-4" />
               Exporter CSV
             </Button>
-            <Button onClick={() => setShowForm(!showForm)} className="gap-2">
+            <Button onClick={() => setShowForm(!showForm)} className="gap-2 text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
               <Plus className="w-4 h-4" />
               {showForm ? "Annuler" : "Nouvelle Société"}
             </Button>
@@ -418,19 +403,12 @@ export default function DeliveryCompaniesPage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
-                {/* SECTION 1: INFORMATIONS GÉNÉRALES */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Informations générales</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="name">Nom de la société *</Label>
-                      <Input
-                        id="name"
-                        required
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        placeholder="Ex: Livraison Express"
-                      />
+                      <Input id="name" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Ex: Livraison Express" />
                     </div>
                     <div className="md:col-span-2">
                       <Label htmlFor="logo">Logo de la société</Label>
@@ -439,11 +417,7 @@ export default function DeliveryCompaniesPage() {
                           <div className="space-y-2">
                             <div className="relative w-full h-48 border-2 border-gray-200 rounded-lg overflow-hidden bg-white">
                               <img src={formData.logo_url} alt="Preview" className="w-full h-full object-contain p-4" />
-                              <button
-                                type="button"
-                                onClick={() => setFormData((prev) => ({ ...prev, logo_url: "" }))}
-                                className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full hover:bg-red-600"
-                              >
+                              <button type="button" onClick={() => setFormData((prev) => ({ ...prev, logo_url: "" }))} className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full hover:bg-red-600">
                                 <X className="w-4 h-4" />
                               </button>
                             </div>
@@ -451,14 +425,7 @@ export default function DeliveryCompaniesPage() {
                           </div>
                         ) : (
                           <div className="flex items-center gap-2">
-                            <Input
-                              id="logo"
-                              type="file"
-                              accept="image/*"
-                              onChange={handleLogoUpload}
-                              disabled={uploading}
-                              className="flex-1"
-                            />
+                            <Input id="logo" type="file" accept="image/*" onChange={handleLogoUpload} disabled={uploading} className="flex-1" />
                             {uploading && <span className="text-sm text-gray-500">Upload...</span>}
                           </div>
                         )}
@@ -466,100 +433,51 @@ export default function DeliveryCompaniesPage() {
                     </div>
                     <div className="md:col-span-2">
                       <Label htmlFor="description">Description</Label>
-                      <Textarea
-                        id="description"
-                        value={formData.description}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        placeholder="Décrivez les services de la société..."
-                        rows={3}
-                      />
+                      <Textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Décrivez les services de la société..." rows={3} />
                     </div>
                   </div>
                 </div>
 
-                {/* SECTION 2: CONTACT */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Contact</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="phone">Téléphone *</Label>
-                      <Input id="phone" required value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} placeholder="+261 32 00 000 00" />
-                    </div>
-                    <div>
-                      <Label htmlFor="whatsapp">WhatsApp</Label>
-                      <Input id="whatsapp" value={formData.whatsapp} onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })} placeholder="+261 32 00 000 00" />
-                    </div>
-                    <div>
-                      <Label htmlFor="messenger">Messenger</Label>
-                      <Input id="messenger" value={formData.messenger} onChange={(e) => setFormData({ ...formData, messenger: e.target.value })} placeholder="Nom sur Messenger" />
-                    </div>
-                    <div>
-                      <Label htmlFor="email">Email</Label>
-                      <Input id="email" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="contact@entreprise.mg" />
-                    </div>
-                    <div className="md:col-span-2">
-                      <Label htmlFor="website">Site Web</Label>
-                      <Input id="website" type="url" value={formData.website} onChange={(e) => setFormData({ ...formData, website: e.target.value })} placeholder="https://www.entreprise.mg" />
-                    </div>
+                    <div><Label htmlFor="phone">Téléphone *</Label><Input id="phone" required value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} placeholder="+261 32 00 000 00" /></div>
+                    <div><Label htmlFor="whatsapp">WhatsApp</Label><Input id="whatsapp" value={formData.whatsapp} onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })} placeholder="+261 32 00 000 00" /></div>
+                    <div><Label htmlFor="messenger">Messenger</Label><Input id="messenger" value={formData.messenger} onChange={(e) => setFormData({ ...formData, messenger: e.target.value })} placeholder="Nom sur Messenger" /></div>
+                    <div><Label htmlFor="email">Email</Label><Input id="email" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="contact@entreprise.mg" /></div>
+                    <div className="md:col-span-2"><Label htmlFor="website">Site Web</Label><Input id="website" type="url" value={formData.website} onChange={(e) => setFormData({ ...formData, website: e.target.value })} placeholder="https://www.entreprise.mg" /></div>
                   </div>
                 </div>
 
-                {/* SECTION 3: SERVICE */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Détails du service</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="delivery_time">Délai de livraison</Label>
-                      <Input id="delivery_time" value={formData.delivery_time} onChange={(e) => setFormData({ ...formData, delivery_time: e.target.value })} placeholder="Ex: 24-48h" />
-                    </div>
-                    <div>
-                      <Label htmlFor="min_order_amount">Montant minimum</Label>
-                      <Input id="min_order_amount" value={formData.min_order_amount} onChange={(e) => setFormData({ ...formData, min_order_amount: e.target.value })} placeholder="Ex: 50 000 Ar" />
-                    </div>
-                    <div>
-                      <Label htmlFor="delivery_fee">Frais de livraison</Label>
-                      <Input id="delivery_fee" value={formData.delivery_fee} onChange={(e) => setFormData({ ...formData, delivery_fee: e.target.value })} placeholder="Ex: 5 000 Ar" />
-                    </div>
-                    <div>
-                      <Label htmlFor="working_hours">Horaires</Label>
-                      <Input id="working_hours" value={formData.working_hours} onChange={(e) => setFormData({ ...formData, working_hours: e.target.value })} placeholder="Ex: Lun-Sam 8h-18h" />
-                    </div>
+                    <div><Label htmlFor="delivery_time">Délai de livraison</Label><Input id="delivery_time" value={formData.delivery_time} onChange={(e) => setFormData({ ...formData, delivery_time: e.target.value })} placeholder="Ex: 24-48h" /></div>
+                    <div><Label htmlFor="min_order_amount">Montant minimum</Label><Input id="min_order_amount" value={formData.min_order_amount} onChange={(e) => setFormData({ ...formData, min_order_amount: e.target.value })} placeholder="Ex: 50 000 Ar" /></div>
+                    <div><Label htmlFor="delivery_fee">Frais de livraison</Label><Input id="delivery_fee" value={formData.delivery_fee} onChange={(e) => setFormData({ ...formData, delivery_fee: e.target.value })} placeholder="Ex: 5 000 Ar" /></div>
+                    <div><Label htmlFor="working_hours">Horaires</Label><Input id="working_hours" value={formData.working_hours} onChange={(e) => setFormData({ ...formData, working_hours: e.target.value })} placeholder="Ex: Lun-Sam 8h-18h" /></div>
                   </div>
                 </div>
 
-                {/* SECTION 4: ZONES DE SERVICE */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Zones de service *</h3>
-                  <ZoneSelector
-                    selectedZones={formData.service_areas}
-                    onChange={(zones) => setFormData({ ...formData, service_areas: zones })}
-                    label=""
-                    required
-                    placeholder="Sélectionner les zones desservies..."
-                  />
+                  <ZoneSelector selectedZones={formData.service_areas} onChange={(zones) => setFormData({ ...formData, service_areas: zones })} label="" required placeholder="Sélectionner les zones desservies..." />
                 </div>
 
-                {/* SECTION 5: CARACTÉRISTIQUES */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Caractéristiques</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="features">Fonctionnalités</Label>
                       <div className="flex gap-2 mb-2">
-                        <Input
-                          id="features"
-                          value={featureInput}
-                          onChange={(e) => setFeatureInput(e.target.value)}
-                          onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addFeature())}
-                          placeholder="Ex: Paiement mobile"
-                        />
+                        <Input id="features" value={featureInput} onChange={(e) => setFeatureInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addFeature())} placeholder="Ex: Paiement mobile" />
                         <Button type="button" onClick={addFeature} size="sm">+</Button>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {formData.features.map((feature, idx) => (
-                          <span key={idx} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm flex items-center gap-2">
+                          <span key={idx} className="px-3 py-1 rounded-full text-sm flex items-center gap-2" style={{ backgroundColor: "#e6f4f3", color: VITOGAZ_GREEN }}>
                             {feature}
-                            <button type="button" onClick={() => removeFeature(feature)} className="hover:text-blue-900">×</button>
+                            <button type="button" onClick={() => removeFeature(feature)} className="hover:opacity-70">×</button>
                           </span>
                         ))}
                       </div>
@@ -567,20 +485,14 @@ export default function DeliveryCompaniesPage() {
                     <div>
                       <Label htmlFor="specialties">Spécialités</Label>
                       <div className="flex gap-2 mb-2">
-                        <Input
-                          id="specialties"
-                          value={specialtyInput}
-                          onChange={(e) => setSpecialtyInput(e.target.value)}
-                          onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSpecialty())}
-                          placeholder="Ex: Livraison express"
-                        />
+                        <Input id="specialties" value={specialtyInput} onChange={(e) => setSpecialtyInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSpecialty())} placeholder="Ex: Livraison express" />
                         <Button type="button" onClick={addSpecialty} size="sm">+</Button>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {formData.specialties.map((specialty, idx) => (
-                          <span key={idx} className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm flex items-center gap-2">
+                          <span key={idx} className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm flex items-center gap-2">
                             {specialty}
-                            <button type="button" onClick={() => removeSpecialty(specialty)} className="hover:text-green-900">×</button>
+                            <button type="button" onClick={() => removeSpecialty(specialty)} className="hover:text-emerald-900">×</button>
                           </span>
                         ))}
                       </div>
@@ -588,39 +500,19 @@ export default function DeliveryCompaniesPage() {
                   </div>
                 </div>
 
-                {/* SECTION 6: PARAMÈTRES */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Paramètres</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="display_order">Ordre d'affichage</Label>
-                      <Input
-                        id="display_order"
-                        type="number"
-                        value={formData.display_order}
-                        onChange={(e) => setFormData({ ...formData, display_order: parseInt(e.target.value) || 0 })}
-                        placeholder="0"
-                      />
-                    </div>
+                    <div><Label htmlFor="display_order">Ordre d'affichage</Label><Input id="display_order" type="number" value={formData.display_order} onChange={(e) => setFormData({ ...formData, display_order: parseInt(e.target.value) || 0 })} placeholder="0" /></div>
                     <div className="flex items-end">
                       <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={formData.is_verified}
-                          onChange={(e) => setFormData({ ...formData, is_verified: e.target.checked })}
-                          className="w-4 h-4 text-blue-600"
-                        />
+                        <input type="checkbox" checked={formData.is_verified} onChange={(e) => setFormData({ ...formData, is_verified: e.target.checked })} className="w-4 h-4" />
                         <span className="text-sm font-medium">Société vérifiée</span>
                       </label>
                     </div>
                     <div className="flex items-end">
                       <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={formData.is_active}
-                          onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                          className="w-4 h-4 text-blue-600"
-                        />
+                        <input type="checkbox" checked={formData.is_active} onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })} className="w-4 h-4" />
                         <span className="text-sm font-medium">Active</span>
                       </label>
                     </div>
@@ -628,7 +520,9 @@ export default function DeliveryCompaniesPage() {
                 </div>
 
                 <div className="flex gap-3 pt-4 border-t">
-                  <Button type="submit">{editingId ? "Mettre à jour" : "Créer"}</Button>
+                  <Button type="submit" className="text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
+                    {editingId ? "Mettre à jour" : "Créer"}
+                  </Button>
                   <Button type="button" variant="outline" onClick={resetForm}>Annuler</Button>
                 </div>
               </form>
@@ -641,12 +535,7 @@ export default function DeliveryCompaniesPage() {
           <CardContent className="pt-6">
             <div className="relative">
               <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-              <Input
-                placeholder="Rechercher par nom ou zone..."
-                className="pl-10"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+              <Input placeholder="Rechercher par nom ou zone..." className="pl-10" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
           </CardContent>
         </Card>
@@ -656,111 +545,126 @@ export default function DeliveryCompaniesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Logo</TableHead>
-                <TableHead>Nom</TableHead>
+                <TableHead className="w-14">Logo</TableHead>
+                <TableHead
+                  className="w-36 cursor-pointer select-none transition-colors hover:bg-gray-50"
+                  onClick={() => handleSort("name")}
+                  style={sortColumn === "name" ? { backgroundColor: "#f0faf9", color: VITOGAZ_GREEN } : {}}
+                >
+                  <span className="flex items-center gap-1">Nom<SortIcon column="name" /></span>
+                </TableHead>
                 <TableHead>Contact</TableHead>
-                <TableHead>Zones</TableHead>
+                <TableHead
+                  className="cursor-pointer select-none transition-colors hover:bg-gray-50"
+                  onClick={() => handleSort("zones")}
+                  style={sortColumn === "zones" ? { backgroundColor: "#f0faf9", color: VITOGAZ_GREEN } : {}}
+                >
+                  <span className="flex items-center gap-1">Zones<SortIcon column="zones" /></span>
+                </TableHead>
                 <TableHead>Service</TableHead>
                 <TableHead>Statut</TableHead>
-                <TableHead>Note</TableHead>
-                <TableHead>Actif</TableHead>
+                <TableHead
+                  className="cursor-pointer select-none transition-colors hover:bg-gray-50"
+                  onClick={() => handleSort("rating")}
+                  style={sortColumn === "rating" ? { backgroundColor: "#f0faf9", color: VITOGAZ_GREEN } : {}}
+                >
+                  <span className="flex items-center gap-1">Note<SortIcon column="rating" /></span>
+                </TableHead>
+                <TableHead
+                  className="cursor-pointer select-none transition-colors hover:bg-gray-50"
+                  onClick={() => handleSort("is_active")}
+                  style={sortColumn === "is_active" ? { backgroundColor: "#f0faf9", color: VITOGAZ_GREEN } : {}}
+                >
+                  <span className="flex items-center gap-1">Actif<SortIcon column="is_active" /></span>
+                </TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">Chargement...</TableCell>
-                </TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-8">Chargement...</TableCell></TableRow>
               ) : paginatedCompanies.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">Aucune société trouvée</TableCell>
-                </TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-8">Aucune société trouvée</TableCell></TableRow>
               ) : (
                 paginatedCompanies.map((company) => (
-                  <TableRow
-                    key={company.id}
-                    className={!company.is_active ? "opacity-50" : ""}
-                  >
+                  <TableRow key={company.id} className={!company.is_active ? "opacity-50" : ""}>
+                    {/* Logo */}
                     <TableCell>
                       {company.logo_url ? (
-                        <img src={company.logo_url} alt={company.name} className="w-16 h-16 object-contain rounded-lg bg-white p-1 border" />
+                        <img src={company.logo_url} alt={company.name} className="w-12 h-12 object-contain rounded-lg bg-white p-1 border" />
                       ) : (
-                        <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center">
-                          <ImageIcon className="w-6 h-6 text-gray-400" />
+                        <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                          <ImageIcon className="w-5 h-5 text-gray-400" />
                         </div>
                       )}
                     </TableCell>
-                    <TableCell className="font-medium">
+                    {/* Nom — largeur réduite */}
+                    <TableCell className="w-36">
                       <div className="flex flex-col">
-                        <span>{company.name}</span>
+                        <span className="font-medium text-sm leading-tight">{company.name}</span>
                         {company.description && (
-                          <span className="text-xs text-gray-500 line-clamp-1">{company.description}</span>
+                          <span className="text-xs text-gray-400 line-clamp-1 mt-0.5">{company.description}</span>
                         )}
                       </div>
                     </TableCell>
+                    {/* Contact — sans icônes */}
                     <TableCell>
-                      <div className="flex flex-col gap-1 text-sm">
-                        <div className="flex items-center gap-1">
-                          <Phone className="w-3 h-3" />
-                          {company.phone}
-                        </div>
-                        {company.whatsapp && (
-                          <div className="text-green-600 text-xs">WA: {company.whatsapp}</div>
-                        )}
-                        {company.email && (
-                          <div className="text-gray-500 text-xs">{company.email}</div>
-                        )}
+                      <div className="flex flex-col gap-0.5 text-xs text-gray-600">
+                        <span className="font-medium">{company.phone}</span>
+                        {company.whatsapp && <span className="text-emerald-600">WA: {company.whatsapp}</span>}
+                        {company.email && <span className="text-gray-400">{company.email}</span>}
                       </div>
                     </TableCell>
+                    {/* Zones — sans icône MapPin */}
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {company.service_areas && company.service_areas.length > 0 ? (
-                          company.service_areas.slice(0, 2).map((area, idx) => (
-                            <span key={idx} className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">
-                              <MapPin className="w-3 h-3 inline mr-1" />
-                              {area}
-                            </span>
-                          ))
+                          <>
+                            {company.service_areas.slice(0, 2).map((area, idx) => (
+                              <span key={idx} className="px-2 py-0.5 text-xs rounded-full" style={{ backgroundColor: "#e6f4f3", color: VITOGAZ_GREEN }}>
+                                {area}
+                              </span>
+                            ))}
+                            {company.service_areas.length > 2 && (
+                              <span className="text-xs text-gray-400">+{company.service_areas.length - 2}</span>
+                            )}
+                          </>
                         ) : (
-                          <span className="text-gray-400 text-sm">-</span>
-                        )}
-                        {company.service_areas.length > 2 && (
-                          <span className="text-xs text-gray-500">+{company.service_areas.length - 2}</span>
+                          <span className="text-gray-400 text-xs">-</span>
                         )}
                       </div>
                     </TableCell>
+                    {/* Service */}
                     <TableCell>
                       <div className="text-xs text-gray-600">
                         {company.delivery_time && <div>⏱️ {company.delivery_time}</div>}
                         {company.delivery_fee && <div>💰 {company.delivery_fee}</div>}
                       </div>
                     </TableCell>
-                    {/* Statut original — vérifiée + active/inactive */}
+                    {/* Statut — vérifiée */}
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         {company.is_verified && (
-                          <span className="flex items-center gap-1 text-green-600 text-xs">
+                          <span className="flex items-center gap-1 text-xs" style={{ color: VITOGAZ_GREEN }}>
                             <CheckCircle className="w-3 h-3" />
                             Vérifiée
                           </span>
                         )}
-                        {company.is_active ? (
-                          <span className="text-green-600 text-xs">● Active</span>
-                        ) : (
-                          <span className="text-gray-400 text-xs">● Inactive</span>
-                        )}
+                        <span className={`text-xs ${company.is_active ? "text-emerald-600" : "text-gray-400"}`}>
+                          ● {company.is_active ? "Active" : "Inactive"}
+                        </span>
                       </div>
                     </TableCell>
+                    {/* Note */}
                     <TableCell>
                       {company.review_count > 0 ? (
                         <div className="flex items-center gap-1 text-sm">
-                          <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-                          <span>{company.rating.toFixed(1)}</span>
+                          <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
+                          <span className="font-medium">{company.rating.toFixed(1)}</span>
                           <span className="text-gray-400 text-xs">({company.review_count})</span>
                         </div>
                       ) : (
-                        <span className="text-gray-400 text-sm">-</span>
+                        <span className="text-gray-400 text-xs">-</span>
                       )}
                     </TableCell>
                     {/* Toggle is_active */}
@@ -769,25 +673,16 @@ export default function DeliveryCompaniesPage() {
                         onClick={() => handleToggleActive(company)}
                         disabled={togglingId === company.id}
                         title={company.is_active ? "Désactiver" : "Activer"}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                          company.is_active ? "bg-green-500" : "bg-gray-300"
-                        } ${togglingId === company.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${togglingId === company.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                        style={{ backgroundColor: company.is_active ? VITOGAZ_GREEN : "#D1D5DB" }}
                       >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            company.is_active ? "translate-x-6" : "translate-x-1"
-                          }`}
-                        />
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${company.is_active ? "translate-x-6" : "translate-x-1"}`} />
                       </button>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="sm" onClick={() => handleEdit(company)}>
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button variant="destructive" size="sm" onClick={() => handleDelete(company.id)}>
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleEdit(company)}><Edit className="w-4 h-4" /></Button>
+                        <Button variant="destructive" size="sm" onClick={() => handleDelete(company.id)}><Trash2 className="w-4 h-4" /></Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -796,43 +691,37 @@ export default function DeliveryCompaniesPage() {
             </TableBody>
           </Table>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
-              <p className="text-sm text-gray-500">
-                Page {currentPage} sur {totalPages} — {filteredCompanies.length} société(s)
-              </p>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                  <Button
-                    key={page}
-                    variant={page === currentPage ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCurrentPage(page)}
-                    className="w-8"
-                  >
-                    {page}
+          {/* Pied de tableau */}
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 min-h-[52px]">
+            <p className="text-xs text-gray-400 italic">{sortLabel() || ""}</p>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-3">
+                <p className="text-sm text-gray-500">
+                  Page {currentPage} sur {totalPages} — {sortedCompanies.length} société(s)
+                </p>
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="sm" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>
+                    <ChevronLeft className="w-4 h-4" />
                   </Button>
-                ))}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <Button
+                      key={page}
+                      size="sm"
+                      onClick={() => setCurrentPage(page)}
+                      className="w-8"
+                      variant={page === currentPage ? "default" : "outline"}
+                      style={page === currentPage ? { backgroundColor: VITOGAZ_GREEN, color: "white", borderColor: VITOGAZ_GREEN } : {}}
+                    >
+                      {page}
+                    </Button>
+                  ))}
+                  <Button variant="outline" size="sm" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </Card>
       </main>
     </div>

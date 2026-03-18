@@ -8,16 +8,16 @@ import {
   Truck,
   FileText,
   Tag,
-  Package,
   QrCode,
   MapPin,
   Activity,
   TrendingUp,
   TrendingDown,
-  Minus,
   Smartphone,
   Globe,
   Clock,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
 import { Header } from "@/components/Header";
@@ -38,6 +38,21 @@ import {
   Cell,
   Legend,
 } from "recharts";
+
+const VITOGAZ_GREEN = "#008B7F";
+const QR_PAGE_SIZE = 10;
+
+// Icône bouteille de gaz custom
+const GasBottleIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10 2h4" />
+    <path d="M12 2v2" />
+    <path d="M8 6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2z" />
+    <path d="M8 10h8" />
+    <path d="M8 14h8" />
+    <circle cx="12" cy="17" r="1" fill="currentColor" stroke="none" />
+  </svg>
+);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -77,13 +92,13 @@ const PERIODS: { label: string; value: PeriodKey }[] = [
 ];
 
 const CHART_COLORS = {
-  resellers: "#3B82F6",
+  resellers: VITOGAZ_GREEN,
   "delivery-companies": "#10B981",
   promotions: "#F59E0B",
   "qr-scans": "#8B5CF6",
 };
 
-const OS_COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444"];
+const OS_COLORS = [VITOGAZ_GREEN, "#10B981", "#F59E0B", "#8B5CF6", "#EF4444"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -199,7 +214,7 @@ function EvolutionCard({
       <CardContent className="pt-0">
         {loading ? (
           <div className="h-48 flex items-center justify-center">
-            <div className="w-6 h-6 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
+            <div className="w-6 h-6 border-2 border-gray-200 rounded-full animate-spin" style={{ borderTopColor: VITOGAZ_GREEN }} />
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={180}>
@@ -280,8 +295,9 @@ export default function DashboardPage() {
   // QR details
   const [qrScans, setQrScans] = useState<QrScan[]>([]);
   const [qrLoading, setQrLoading] = useState(true);
+  const [qrPage, setQrPage] = useState(1);
 
-  // Stats cards (existing)
+  // Stats cards
   const [stats, setStats] = useState({ resellers: 0, deliveryCompanies: 0, documents: 0, promotions: 0, products: 0 });
   const [statsLoading, setStatsLoading] = useState(true);
 
@@ -380,11 +396,21 @@ export default function DashboardPage() {
   }, {});
   const deviceData = Object.entries(deviceCounts).map(([name, value]) => ({ name, value }));
 
+  // ── QR pagination ─────────────────────────────────────────────────────────────
+  const qrTotalPages = Math.ceil(qrScans.length / QR_PAGE_SIZE);
+  const paginatedQrScans = qrScans.slice(
+    (qrPage - 1) * QR_PAGE_SIZE,
+    qrPage * QR_PAGE_SIZE
+  );
+
   // ── Stat cards config ────────────────────────────────────────────────────────
 
   const statCards = [
-    { title: "Revendeurs", value: stats.resellers, icon: Building2, href: "/resellers", color: "text-blue-600", bgColor: "bg-blue-50" },
-    { title: "Produits", value: stats.products, icon: Package, href: "/products", color: "text-red-600", bgColor: "bg-red-50" },
+    { title: "Revendeurs", value: stats.resellers, icon: Building2, href: "/resellers", color: "text-teal-700", bgColor: "bg-teal-50" },
+    {
+      title: "Produits", value: stats.products, icon: GasBottleIcon, href: "/products",
+      color: "text-teal-700", bgColor: "bg-teal-50",
+    },
     { title: "Sociétés de Livraison", value: stats.deliveryCompanies, icon: Truck, href: "/delivery-companies", color: "text-emerald-600", bgColor: "bg-emerald-50" },
     { title: "Documents", value: stats.documents, icon: FileText, href: "/documents", color: "text-purple-600", bgColor: "bg-purple-50" },
     { title: "Promotions Actives", value: stats.promotions, icon: Tag, href: "/promotions", color: "text-orange-600", bgColor: "bg-orange-50" },
@@ -485,7 +511,7 @@ export default function DashboardPage() {
               <CardContent>
                 {qrLoading ? (
                   <div className="h-48 flex items-center justify-center">
-                    <div className="w-6 h-6 border-2 border-gray-200 border-t-violet-500 rounded-full animate-spin" />
+                    <div className="w-6 h-6 border-2 border-gray-200 rounded-full animate-spin" style={{ borderTopColor: VITOGAZ_GREEN }} />
                   </div>
                 ) : osData.length === 0 ? (
                   <div className="h-48 flex items-center justify-center text-gray-400 text-sm">Aucune donnée</div>
@@ -516,7 +542,7 @@ export default function DashboardPage() {
               <CardContent>
                 {qrLoading ? (
                   <div className="h-48 flex items-center justify-center">
-                    <div className="w-6 h-6 border-2 border-gray-200 border-t-violet-500 rounded-full animate-spin" />
+                    <div className="w-6 h-6 border-2 border-gray-200 rounded-full animate-spin" style={{ borderTopColor: VITOGAZ_GREEN }} />
                   </div>
                 ) : deviceData.length === 0 ? (
                   <div className="h-48 flex items-center justify-center text-gray-400 text-sm">Aucune donnée</div>
@@ -549,7 +575,7 @@ export default function DashboardPage() {
               <CardContent>
                 {qrLoading ? (
                   <div className="h-48 flex items-center justify-center">
-                    <div className="w-6 h-6 border-2 border-gray-200 border-t-violet-500 rounded-full animate-spin" />
+                    <div className="w-6 h-6 border-2 border-gray-200 rounded-full animate-spin" style={{ borderTopColor: VITOGAZ_GREEN }} />
                   </div>
                 ) : (
                   <div className="space-y-2 mt-2">
@@ -571,8 +597,11 @@ export default function DashboardPage() {
                           <div className="flex items-center gap-2">
                             <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                               <div
-                                className="h-full bg-violet-400 rounded-full"
-                                style={{ width: `${(count / qrScans.length) * 100}%` }}
+                                className="h-full rounded-full"
+                                style={{
+                                  width: `${(count / qrScans.length) * 100}%`,
+                                  backgroundColor: VITOGAZ_GREEN,
+                                }}
                               />
                             </div>
                             <span className="text-xs font-semibold text-gray-600 w-4 text-right">{count}</span>
@@ -585,61 +614,109 @@ export default function DashboardPage() {
             </Card>
           </div>
 
-          {/* Derniers scans */}
+          {/* Derniers scans — avec pagination */}
           <Card className="border border-gray-100 shadow-sm mt-6">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold text-gray-800 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-violet-500" />
-                Derniers scans
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base font-semibold text-gray-800 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-violet-500" />
+                  Derniers scans
+                </CardTitle>
+                {qrScans.length > 0 && (
+                  <span className="text-xs text-gray-400">
+                    {qrScans.length} scan{qrScans.length > 1 ? "s" : ""} au total
+                  </span>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               {qrLoading ? (
                 <div className="h-24 flex items-center justify-center">
-                  <div className="w-6 h-6 border-2 border-gray-200 border-t-violet-500 rounded-full animate-spin" />
+                  <div className="w-6 h-6 border-2 border-gray-200 rounded-full animate-spin" style={{ borderTopColor: VITOGAZ_GREEN }} />
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-100 bg-gray-50">
-                        <th className="text-left text-xs font-medium text-gray-500 px-6 py-3">Date</th>
-                        <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Localisation</th>
-                        <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">OS</th>
-                        <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Navigateur</th>
-                        <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Appareil</th>
-                        <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">IP</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {qrScans.slice(0, 10).map((scan) => (
-                        <tr key={scan.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-3 text-gray-700 whitespace-nowrap">
-                            {new Date(scan.scanned_at).toLocaleString("fr-FR", {
-                              day: "2-digit", month: "short", year: "numeric",
-                              hour: "2-digit", minute: "2-digit",
-                            })}
-                          </td>
-                          <td className="px-4 py-3 text-gray-700">
-                            {scan.city && scan.city !== "Unknown" ? `${scan.city}, ${scan.country}` : scan.country || "—"}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
-                              {scan.os || "—"}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-gray-600">{scan.browser || "—"}</td>
-                          <td className="px-4 py-3">
-                            <span className="px-2 py-0.5 bg-violet-50 text-violet-700 rounded-full text-xs font-medium">
-                              {scan.device_type || "—"}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-gray-400 font-mono text-xs">{scan.ip_address}</td>
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-100 bg-gray-50">
+                          <th className="text-left text-xs font-medium text-gray-500 px-6 py-3">Date</th>
+                          <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Localisation</th>
+                          <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">OS</th>
+                          <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Navigateur</th>
+                          <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Appareil</th>
+                          <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">IP</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {paginatedQrScans.map((scan) => (
+                          <tr key={scan.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-6 py-3 text-gray-700 whitespace-nowrap">
+                              {new Date(scan.scanned_at).toLocaleString("fr-FR", {
+                                day: "2-digit", month: "short", year: "numeric",
+                                hour: "2-digit", minute: "2-digit",
+                              })}
+                            </td>
+                            <td className="px-4 py-3 text-gray-700">
+                              {scan.city && scan.city !== "Unknown" ? `${scan.city}, ${scan.country}` : scan.country || "—"}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: "#e6f4f3", color: VITOGAZ_GREEN }}>
+                                {scan.os || "—"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-gray-600">{scan.browser || "—"}</td>
+                            <td className="px-4 py-3">
+                              <span className="px-2 py-0.5 bg-violet-50 text-violet-700 rounded-full text-xs font-medium">
+                                {scan.device_type || "—"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-gray-400 font-mono text-xs">{scan.ip_address}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Pagination QR scans */}
+                  {qrTotalPages > 1 && (
+                    <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100">
+                      <p className="text-sm text-gray-500">
+                        Page {qrPage} sur {qrTotalPages} — {qrScans.length} scan{qrScans.length > 1 ? "s" : ""}
+                      </p>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setQrPage((p) => Math.max(1, p - 1))}
+                          disabled={qrPage === 1}
+                          className="w-8 h-8 rounded-md border border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-300 disabled:opacity-40 transition-colors"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        {Array.from({ length: qrTotalPages }, (_, i) => i + 1).map((page) => (
+                          <button
+                            key={page}
+                            onClick={() => setQrPage(page)}
+                            className="w-8 h-8 rounded-md text-sm font-medium transition-colors border"
+                            style={
+                              page === qrPage
+                                ? { backgroundColor: VITOGAZ_GREEN, color: "white", borderColor: VITOGAZ_GREEN }
+                                : { borderColor: "#e5e7eb", color: "#374151" }
+                            }
+                          >
+                            {page}
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => setQrPage((p) => Math.min(qrTotalPages, p + 1))}
+                          disabled={qrPage === qrTotalPages}
+                          className="w-8 h-8 rounded-md border border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-300 disabled:opacity-40 transition-colors"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -657,8 +734,8 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {[
-                { href: "/resellers", bg: "bg-blue-50 hover:bg-blue-100", title: "text-blue-900", sub: "text-blue-700", label: "Ajouter un Revendeur", desc: "Créer une nouvelle fiche revendeur" },
-                { href: "/products", bg: "bg-red-50 hover:bg-red-100", title: "text-red-900", sub: "text-red-700", label: "Ajouter un Produit", desc: "Créer un nouveau produit avec image" },
+                { href: "/resellers", bg: "bg-teal-50 hover:bg-teal-100", title: "text-teal-900", sub: "text-teal-700", label: "Ajouter un Revendeur", desc: "Créer une nouvelle fiche revendeur" },
+                { href: "/products", bg: "bg-teal-50 hover:bg-teal-100", title: "text-teal-900", sub: "text-teal-700", label: "Ajouter un Produit", desc: "Créer un nouveau produit avec image" },
                 { href: "/promotions", bg: "bg-orange-50 hover:bg-orange-100", title: "text-orange-900", sub: "text-orange-700", label: "Nouvelle Promotion", desc: "Lancer une campagne promotionnelle" },
                 { href: "/documents", bg: "bg-purple-50 hover:bg-purple-100", title: "text-purple-900", sub: "text-purple-700", label: "Uploader un Document", desc: "Ajouter PAMF, guides, procédures" },
                 { href: "/zones", bg: "bg-cyan-50 hover:bg-cyan-100", title: "text-cyan-900", sub: "text-cyan-700", label: "Gérer les Zones", desc: "Villes et provinces de Madagascar" },
@@ -695,7 +772,13 @@ export default function DashboardPage() {
                 </div>
               ))}
               <div className="pt-3 border-t">
-                <a href="https://vito-backend-supabase.onrender.com/api" target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                <a
+                  href="https://vito-backend-supabase.onrender.com/api"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium hover:opacity-80 transition-opacity"
+                  style={{ color: VITOGAZ_GREEN }}
+                >
                   → Voir Documentation Swagger
                 </a>
               </div>

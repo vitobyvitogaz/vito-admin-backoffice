@@ -14,7 +14,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Package,
   Plus,
   Edit,
   Trash2,
@@ -28,7 +27,6 @@ import {
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
-import Link from "next/link";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { toast } from "@/lib/use-toast";
 import { uploadProductImage } from "@/lib/supabase";
@@ -37,6 +35,19 @@ import { Header } from "@/components/Header";
 import { Navigation } from "@/components/Navigation";
 
 const PAGE_SIZE = 50;
+const VITOGAZ_GREEN = "#008B7F";
+
+// Icône bouteille de gaz custom
+const GasBottleIcon = ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+  <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10 2h4" />
+    <path d="M12 2v2" />
+    <path d="M8 6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2z" />
+    <path d="M8 10h8" />
+    <path d="M8 14h8" />
+    <circle cx="12" cy="17" r="1" fill="currentColor" stroke="none" />
+  </svg>
+);
 
 // SortKey sans null
 type SortKey = "product_code" | "name" | "category" | "price" | "is_active";
@@ -115,22 +126,16 @@ export default function ProductsPage() {
     const col = sortColumn;
     const dir = sortDirection;
     const sorted = [...filteredProducts].sort((a, b) => {
-      let valA: string | number | boolean = "";
-      let valB: string | number | boolean = "";
-
       if (col === "price") {
-        valA = a.price ?? -1;
-        valB = b.price ?? -1;
-        return dir === "asc" ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
+        const valA = a.price ?? -1;
+        const valB = b.price ?? -1;
+        return dir === "asc" ? valA - valB : valB - valA;
       }
-
       if (col === "is_active") {
-        valA = a.is_active ? 1 : 0;
-        valB = b.is_active ? 1 : 0;
-        return dir === "asc" ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
+        const valA = a.is_active ? 1 : 0;
+        const valB = b.is_active ? 1 : 0;
+        return dir === "asc" ? valA - valB : valB - valA;
       }
-
-      // Colonnes texte : product_code, name, category
       const strA = (a[col] ?? "").toString().toLowerCase();
       const strB = (b[col] ?? "").toString().toLowerCase();
       if (strA < strB) return dir === "asc" ? -1 : 1;
@@ -164,8 +169,8 @@ export default function ProductsPage() {
   // Icône de tri
   const SortIcon = ({ column }: { column: SortKey }) => {
     if (sortColumn !== column) return <ArrowUpDown className="w-3.5 h-3.5 text-gray-400 ml-1 inline" />;
-    if (sortDirection === "asc") return <ArrowUp className="w-3.5 h-3.5 text-blue-600 ml-1 inline" />;
-    return <ArrowDown className="w-3.5 h-3.5 text-blue-600 ml-1 inline" />;
+    if (sortDirection === "asc") return <ArrowUp className="w-3.5 h-3.5 ml-1 inline" style={{ color: VITOGAZ_GREEN }} />;
+    return <ArrowDown className="w-3.5 h-3.5 ml-1 inline" style={{ color: VITOGAZ_GREEN }} />;
   };
 
   // Label du tri actif
@@ -178,6 +183,9 @@ export default function ProductsPage() {
       price: "Prix",
       is_active: "Actif",
     };
+    if (sortColumn === "is_active") {
+      return `Trié par Actif (${sortDirection === "desc" ? "Actifs en premier" : "Inactifs en premier"})`;
+    }
     return `Trié par ${labels[sortColumn]} (${sortDirection === "asc" ? "A → Z" : "Z → A"})`;
   };
 
@@ -371,7 +379,7 @@ export default function ProductsPage() {
         {/* Actions Bar */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Package className="w-8 h-8 text-blue-600" />
+            <GasBottleIcon className="w-8 h-8" style={{ color: VITOGAZ_GREEN } as React.CSSProperties} />
             <div>
               <h2 className="text-2xl font-bold">Produits</h2>
               <p className="text-sm text-gray-500">
@@ -389,7 +397,11 @@ export default function ProductsPage() {
               <Download className="w-4 h-4" />
               Exporter CSV
             </Button>
-            <Button onClick={() => setShowForm(!showForm)} className="gap-2">
+            <Button
+              onClick={() => setShowForm(!showForm)}
+              className="gap-2 text-white"
+              style={{ backgroundColor: VITOGAZ_GREEN }}
+            >
               <Plus className="w-4 h-4" />
               {showForm ? "Annuler" : "Nouveau Produit"}
             </Button>
@@ -516,7 +528,12 @@ export default function ProductsPage() {
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <Button type="submit" disabled={uploading}>
+                  <Button
+                    type="submit"
+                    disabled={uploading}
+                    className="text-white"
+                    style={{ backgroundColor: VITOGAZ_GREEN }}
+                  >
                     {uploading ? "Upload en cours..." : editingId ? "Mettre à jour" : "Créer"}
                   </Button>
                   <Button type="button" variant="outline" onClick={resetForm}>
@@ -548,16 +565,14 @@ export default function ProductsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                {/* Colonnes triables : Code, Nom, Catégorie, Prix, Actif */}
                 {sortableCols.map((col) => {
                   const isActive = sortColumn === col.key;
                   return (
                     <TableHead
                       key={col.key}
                       onClick={() => handleSort(col.key)}
-                      className={`cursor-pointer select-none transition-colors ${
-                        isActive ? "bg-blue-50 text-blue-700" : "hover:bg-gray-50"
-                      }`}
+                      className="cursor-pointer select-none transition-colors hover:bg-gray-50"
+                      style={isActive ? { backgroundColor: "#f0faf9", color: VITOGAZ_GREEN } : {}}
                     >
                       <span className="flex items-center gap-1">
                         {col.label}
@@ -566,7 +581,6 @@ export default function ProductsPage() {
                     </TableHead>
                   );
                 })}
-                {/* Colonne Vedette — non triable */}
                 <TableHead>Vedette</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -617,15 +631,16 @@ export default function ProductsPage() {
                         <span className="text-gray-400">-</span>
                       )}
                     </TableCell>
-                    {/* Toggle is_active — colonne triable */}
+                    {/* Toggle is_active */}
                     <TableCell>
                       <button
                         onClick={() => handleToggleActive(product)}
                         disabled={togglingId === product.id}
                         title={product.is_active ? "Désactiver" : "Activer"}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                          product.is_active ? "bg-green-500" : "bg-gray-300"
-                        } ${togglingId === product.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                          togglingId === product.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                        }`}
+                        style={{ backgroundColor: product.is_active ? VITOGAZ_GREEN : "#D1D5DB" }}
                       >
                         <span
                           className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -690,10 +705,15 @@ export default function ProductsPage() {
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                     <Button
                       key={page}
-                      variant={page === currentPage ? "default" : "outline"}
                       size="sm"
                       onClick={() => setCurrentPage(page)}
                       className="w-8"
+                      style={
+                        page === currentPage
+                          ? { backgroundColor: VITOGAZ_GREEN, color: "white", borderColor: VITOGAZ_GREEN }
+                          : {}
+                      }
+                      variant={page === currentPage ? "default" : "outline"}
                     >
                       {page}
                     </Button>
