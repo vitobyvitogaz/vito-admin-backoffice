@@ -421,7 +421,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header title="VIto Admin" subtitle="Back-office Vitogaz Madagascar" />
+      <Header title="VITOBYVITOGAZ" subtitle="BACKOFFICE" />
       <Navigation />
 
       <main className="p-6 space-y-8 max-w-screen-2xl mx-auto">
