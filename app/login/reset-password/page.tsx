@@ -9,16 +9,11 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Eye, EyeOff, CheckCircle, AlertCircle, KeyRound } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { toast } from "@/lib/use-toast";
 
 const VITOGAZ_GREEN = "#008B7F";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -169,7 +164,6 @@ export default function ResetPasswordPage() {
           {/* Formulaire */}
           {sessionReady && !done && (
             <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Nouveau mot de passe */}
               <div className="space-y-2">
                 <Label htmlFor="password">Nouveau mot de passe</Label>
                 <div className="relative">
@@ -199,7 +193,6 @@ export default function ResetPasswordPage() {
                 )}
               </div>
 
-              {/* Confirmation */}
               <div className="space-y-2">
                 <Label htmlFor="confirm">Confirmer le mot de passe</Label>
                 <div className="relative">

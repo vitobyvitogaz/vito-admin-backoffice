@@ -8,15 +8,10 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft, Loader2, Mail, CheckCircle } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase";
 import { toast } from "@/lib/use-toast";
 
 const VITOGAZ_GREEN = "#008B7F";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
