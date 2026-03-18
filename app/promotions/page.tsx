@@ -36,7 +36,8 @@ import { Navigation } from "@/components/Navigation";
 const API_URL = 'https://vito-backend-supabase.onrender.com/api/v1';
 const VITOGAZ_GREEN = "#008B7F";
 
-type SortKey = "title" | "discount" | "validity" | "zones" | "usage" | "status";
+// "status" retiré des SortKey — colonne Statut supprimée
+type SortKey = "title" | "discount" | "validity" | "zones" | "usage";
 
 interface Promotion {
   id: string;
@@ -149,11 +150,6 @@ export default function PromotionsPage() {
           ? (a.usage_count || 0) - (b.usage_count || 0)
           : (b.usage_count || 0) - (a.usage_count || 0);
       }
-      if (col === "status") {
-        const valA = isActive(a) ? 1 : 0;
-        const valB = isActive(b) ? 1 : 0;
-        return dir === "asc" ? valA - valB : valB - valA;
-      }
       return 0;
     });
     setSortedPromotions(sorted);
@@ -179,16 +175,11 @@ export default function PromotionsPage() {
 
   const sortLabel = (): string | null => {
     if (!sortColumn || !sortDirection) return null;
-    const labels: Record<SortKey, string> = {
-      title: "Titre", discount: "Réduction", validity: "Validité",
-      zones: "Zones", usage: "Utilisations", status: "Statut",
-    };
-    if (sortColumn === "status") return `Trié par Statut (${sortDirection === "desc" ? "Actives en premier" : "Inactives en premier"})`;
     if (sortColumn === "zones") return `Trié par Zones (${sortDirection === "desc" ? "Plus de zones" : "Moins de zones"})`;
     if (sortColumn === "usage") return `Trié par Utilisations (${sortDirection === "desc" ? "Plus utilisées" : "Moins utilisées"})`;
     if (sortColumn === "discount") return `Trié par Réduction (${sortDirection === "desc" ? "Décroissant" : "Croissant"})`;
     if (sortColumn === "validity") return `Trié par Validité (${sortDirection === "desc" ? "Expire le plus tard" : "Expire bientôt"})`;
-    return `Trié par ${labels[sortColumn]} (${sortDirection === "asc" ? "A → Z" : "Z → A"})`;
+    return `Trié par Titre (${sortDirection === "asc" ? "A → Z" : "Z → A"})`;
   };
 
   const fetchPromotions = async () => {
@@ -321,20 +312,16 @@ export default function PromotionsPage() {
     }
   };
 
-  // Toggle is_active directement dans le tableau
+  // Toggle is_active — fetchPromotions() pour forcer le rafraîchissement
   const handleToggleActive = async (promo: Promotion) => {
     setTogglingId(promo.id);
     try {
       await apiPatch(`/promotions/${promo.id}`, { is_active: !promo.is_active });
-      setPromotions((prev) =>
-        prev.map((p) =>
-          p.id === promo.id ? { ...p, is_active: !p.is_active } : p
-        )
-      );
       toast({
         title: "Succès !",
         description: `Promotion ${!promo.is_active ? "activée" : "désactivée"}`,
       });
+      await fetchPromotions();
     } catch (error) {
       console.error("Erreur toggle:", error);
       toast({ title: "Erreur", description: "Impossible de modifier le statut", variant: "destructive" });
@@ -356,13 +343,11 @@ export default function PromotionsPage() {
     setNewCondition("");
   };
 
-  // Statut calculé (date + is_active)
-  const isActive = (promo: Promotion) => {
+  const isEffectivelyActive = (promo: Promotion) => {
     try {
       const now = new Date();
-      const start = new Date(promo.valid_from);
       const end = new Date(promo.valid_until);
-      return promo.is_active && now >= start && now <= end;
+      return promo.is_active && now <= end;
     } catch { return false; }
   };
 
@@ -374,14 +359,12 @@ export default function PromotionsPage() {
     } catch { return "-"; }
   };
 
-  // Colonnes triables
   const sortableCols: { key: SortKey; label: string }[] = [
     { key: "title", label: "Titre" },
     { key: "discount", label: "Réduction" },
     { key: "validity", label: "Validité" },
     { key: "zones", label: "Zones" },
     { key: "usage", label: "Utilisations" },
-    { key: "status", label: "Statut" },
   ];
 
   return (
@@ -398,7 +381,7 @@ export default function PromotionsPage() {
               <h2 className="text-2xl font-bold">Promotions</h2>
               <p className="text-sm text-gray-500">
                 {promotions.length} promotion(s) au total •{" "}
-                {promotions.filter(isActive).length} active(s)
+                {promotions.filter(isEffectivelyActive).length} active(s)
               </p>
             </div>
           </div>
@@ -610,20 +593,18 @@ export default function PromotionsPage() {
                   );
                 })}
                 <TableHead>Code</TableHead>
-                {/* Colonne toggle Actif */}
                 <TableHead>Activer</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={10} className="text-center py-8">Chargement...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-8">Chargement...</TableCell></TableRow>
               ) : sortedPromotions.length === 0 ? (
-                <TableRow><TableCell colSpan={10} className="text-center py-8">Aucune promotion trouvée</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-8">Aucune promotion trouvée</TableCell></TableRow>
               ) : (
                 sortedPromotions.map((promo) => (
-                  // Plus d'opacity-60 — toutes les promos visibles à plein
-                  <TableRow key={promo.id}>
+                  <TableRow key={promo.id} className={!isEffectivelyActive(promo) ? "opacity-60" : ""}>
                     {/* Image */}
                     <TableCell>
                       {promo.image_url ? (
@@ -677,18 +658,6 @@ export default function PromotionsPage() {
                       <span className="font-medium">{promo.usage_count || 0}</span>
                       {promo.max_usage && (
                         <span className="text-xs text-gray-400"> / {promo.max_usage}</span>
-                      )}
-                    </TableCell>
-                    {/* Statut — calculé (date + is_active) */}
-                    <TableCell>
-                      {isActive(promo) ? (
-                        <span className="px-2 py-1 text-xs rounded-full font-semibold" style={{ backgroundColor: "#e6f4f3", color: VITOGAZ_GREEN }}>
-                          Active
-                        </span>
-                      ) : (
-                        <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-500">
-                          Inactive
-                        </span>
                       )}
                     </TableCell>
                     {/* Code */}
