@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
   Building2,
-  Package,
   Truck,
   Tag,
   FileText,
@@ -15,10 +14,22 @@ import {
 
 const VITOGAZ_GREEN = "#008B7F";
 
+// Icône bouteille de gaz custom — utilisée pour Produits
+const GasBottleIcon = ({ className, strokeWidth }: { className?: string; strokeWidth?: number }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth ?? 2} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10 2h4" />
+    <path d="M12 2v2" />
+    <path d="M8 6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2z" />
+    <path d="M8 10h8" />
+    <path d="M8 14h8" />
+    <circle cx="12" cy="17" r="1" fill="currentColor" stroke="none" />
+  </svg>
+);
+
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/resellers", label: "Revendeurs", icon: Building2 },
-  { href: "/products", label: "Produits", icon: Package },
+  { href: "/products", label: "Produits", icon: GasBottleIcon },
   { href: "/delivery-companies", label: "Livraisons", icon: Truck },
   { href: "/promotions", label: "Promotions", icon: Tag },
   { href: "/documents", label: "Documents", icon: FileText },
