@@ -604,7 +604,8 @@ export default function PromotionsPage() {
                 <TableRow><TableCell colSpan={9} className="text-center py-8">Aucune promotion trouvée</TableCell></TableRow>
               ) : (
                 sortedPromotions.map((promo) => (
-                  <TableRow key={promo.id} className={!isEffectivelyActive(promo) ? "opacity-60" : ""}>
+                  //<TableRow key={promo.id} className={!isEffectivelyActive(promo) ? "opacity-60" : ""}>
+                  <TableRow key={promo.id} className={!promo.is_active ? "opacity-50" : ""}>
                     {/* Image */}
                     <TableCell>
                       {promo.image_url ? (
