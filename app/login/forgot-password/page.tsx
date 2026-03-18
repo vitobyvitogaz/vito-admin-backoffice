@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft, Loader2, Mail, CheckCircle } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+//import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase/clients";
 import { toast } from "@/lib/use-toast";
 
 const VITOGAZ_GREEN = "#008B7F";

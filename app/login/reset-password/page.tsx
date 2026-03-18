@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Eye, EyeOff, CheckCircle, AlertCircle, KeyRound } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+//import { supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase/client";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { toast } from "@/lib/use-toast";
 
