@@ -10,11 +10,12 @@ import {
   Tag,
   FileText,
   Users,
+  ScrollText,
 } from "lucide-react";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 
 const VITOGAZ_GREEN = "#008B7F";
 
-// Icône bouteille de gaz custom — utilisée pour Produits
 const GasBottleIcon = ({ className, strokeWidth }: { className?: string; strokeWidth?: number }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth ?? 2} strokeLinecap="round" strokeLinejoin="round">
     <path d="M10 2h4" />
@@ -26,24 +27,40 @@ const GasBottleIcon = ({ className, strokeWidth }: { className?: string; strokeW
   </svg>
 );
 
-const navItems = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/resellers", label: "Revendeurs", icon: Building2 },
-  { href: "/products", label: "Produits", icon: GasBottleIcon },
-  { href: "/delivery-companies", label: "Livraisons", icon: Truck },
-  { href: "/promotions", label: "Promotions", icon: Tag },
-  { href: "/documents", label: "Documents", icon: FileText },
-  { href: "/users", label: "Utilisateurs", icon: Users },
+const baseNavItems = [
+  { href: "/", label: "Dashboard", minRole: "VIEWER", icon: LayoutDashboard },
+  { href: "/resellers", label: "Revendeurs", minRole: "VIEWER", icon: Building2 },
+  { href: "/products", label: "Produits", minRole: "VIEWER", icon: GasBottleIcon },
+  { href: "/delivery-companies", label: "Livraisons", minRole: "VIEWER", icon: Truck },
+  { href: "/promotions", label: "Promotions", minRole: "VIEWER", icon: Tag },
+  { href: "/documents", label: "Documents", minRole: "VIEWER", icon: FileText },
+  { href: "/users", label: "Utilisateurs", minRole: "ADMIN", icon: Users },
+  { href: "/audit", label: "Journal", minRole: "SUPER_ADMIN", icon: ScrollText },
 ];
+
+const ROLE_HIERARCHY = ["API_CLIENT", "VIEWER", "EDITOR", "ADMIN", "SUPER_ADMIN"];
+
+function hasAccess(userRole: string | null, minRole: string): boolean {
+  if (!userRole) return false;
+  const userLevel = ROLE_HIERARCHY.indexOf(userRole);
+  const requiredLevel = ROLE_HIERARCHY.indexOf(minRole);
+  if (userLevel === -1 || requiredLevel === -1) return false;
+  return userLevel >= requiredLevel;
+}
 
 export function Navigation() {
   const pathname = usePathname();
+  const { role } = useCurrentUser();
+
+  const visibleItems = baseNavItems.filter((item) =>
+    hasAccess(role, item.minRole)
+  );
 
   return (
     <nav className="bg-white border-b border-gray-200">
       <div className="px-6 overflow-x-auto scrollbar-hide">
         <div className="flex gap-1 min-w-max">
-          {navItems.map((item) => {
+          {visibleItems.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;
             return (
@@ -58,19 +75,11 @@ export function Navigation() {
                 )}
                 style={
                   isActive
-                    ? {
-                        color: VITOGAZ_GREEN,
-                        borderBottomColor: VITOGAZ_GREEN,
-                        backgroundColor: "#f0faf9",
-                        borderRadius: "6px 6px 0 0",
-                      }
+                    ? { color: VITOGAZ_GREEN, borderBottomColor: VITOGAZ_GREEN, backgroundColor: "#f0faf9", borderRadius: "6px 6px 0 0" }
                     : {}
                 }
               >
-                <Icon
-                  className="w-4 h-4 flex-shrink-0"
-                  strokeWidth={isActive ? 2.5 : 1.8}
-                />
+                <Icon className="w-4 h-4 flex-shrink-0" strokeWidth={isActive ? 2.5 : 1.8} />
                 <span>{item.label}</span>
               </Link>
             );

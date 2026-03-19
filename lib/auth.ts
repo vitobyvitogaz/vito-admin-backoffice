@@ -20,3 +20,39 @@ export function removeAuthToken() {
 export function isAuthenticated(): boolean {
   return !!getAuthToken()
 }
+
+// ── Gestion du rôle ──────────────────────────────────────────────────────────
+
+export function setUserRole(role: string) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('vito_user_role', role)
+  }
+}
+
+export function getUserRole(): string | null {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('vito_user_role')
+  }
+  return null
+}
+
+export function setUserEmail(email: string) {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('vito_user_email', email)
+  }
+}
+
+export function getUserEmail(): string | null {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('vito_user_email')
+  }
+  return null
+}
+
+export function removeUserSession() {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('vito_auth_token')
+    localStorage.removeItem('vito_user_role')
+    localStorage.removeItem('vito_user_email')
+  }
+}

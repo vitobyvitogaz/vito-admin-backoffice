@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { LogIn, Loader2, Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { setAuthToken } from "@/lib/auth";
+import { setAuthToken, setUserRole, setUserEmail } from "@/lib/auth";
 import { toast } from "@/lib/use-toast";
 
 const VITOGAZ_GREEN = "#008B7F";
@@ -51,7 +51,10 @@ export default function LoginPage() {
         throw new Error("Réponse invalide du serveur");
       }
 
+      // Stocker token + rôle + email
       setAuthToken(data.access_token);
+      if (data.user?.role) setUserRole(data.user.role);
+      if (data.user?.email) setUserEmail(data.user.email);
 
       toast({
         title: "Connexion réussie !",
@@ -149,15 +152,9 @@ export default function LoginPage() {
               disabled={loading}
             >
               {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Connexion...
-                </>
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Connexion...</>
               ) : (
-                <>
-                  <LogIn className="mr-2 h-4 w-4" />
-                  Se connecter
-                </>
+                <><LogIn className="mr-2 h-4 w-4" />Se connecter</>
               )}
             </Button>
           </form>
