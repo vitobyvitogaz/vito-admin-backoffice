@@ -104,7 +104,16 @@ export default function UsersPage() {
       await fetchUsers();
       resetForm();
     } catch (error: any) {
-      toast({ title: "Erreur", description: error.message || "Erreur lors de la sauvegarde", variant: "destructive" });
+      const message = (error.message || "").toLowerCase();
+      const friendlyMessage =
+        message.includes("already") || message.includes("existe") || message.includes("registered") || message.includes("duplicate")
+          ? "Un compte avec cet email existe déjà."
+          : message.includes("password")
+          ? "Le mot de passe doit contenir au moins 8 caractères."
+          : message.includes("email")
+          ? "L'adresse email saisie est invalide."
+          : "Erreur lors de la sauvegarde. Veuillez réessayer.";
+      toast({ title: "Erreur", description: friendlyMessage, variant: "destructive" });
     }
   };
 
@@ -182,7 +191,7 @@ export default function UsersPage() {
     const descriptions: Record<string, string> = {
       SUPER_ADMIN: "Accès total + gestion utilisateurs",
       ADMIN: "CRUD sur toutes ressources métier",
-      EDITOR: "Lecture + modification limitée",
+      EDITOR: "Lecture + mise à jour uniquement",
       VIEWER: "Lecture seule",
       API_CLIENT: "Accès API limité",
     };
@@ -196,7 +205,7 @@ export default function UsersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header title="VIto Admin" subtitle="Gestion des Utilisateurs" />
+      <Header title="Vito Admin" subtitle="Gestion des Utilisateurs" />
       <Navigation />
 
       <main className="p-6">
@@ -226,7 +235,6 @@ export default function UsersPage() {
         {!canManageUsers && (
           <div className="mb-6 flex items-center gap-2 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
             <Lock className="w-4 h-4 flex-shrink-0" />
-            {/*<span>Vous êtes en <strong>lecture seule</strong>. Seul un Super Admin peut créer, modifier ou supprimer des utilisateurs.</span>*/}
             <span>Vous pouvez consulter la liste des utilisateurs. Seul un <strong>Super Admin</strong> peut créer, modifier ou supprimer des comptes utilisateurs.</span>
           </div>
         )}

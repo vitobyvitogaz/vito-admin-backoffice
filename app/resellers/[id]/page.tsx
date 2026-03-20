@@ -67,7 +67,7 @@ export default function ResellerDetailPage() {
         <div className="max-w-4xl mx-auto">
           <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
             <p className="text-red-800 font-medium">{error || 'Revendeur introuvable'}</p>
-            <Link href="/revendeurs" className="text-blue-600 hover:text-blue-700 mt-4 inline-block">
+            <Link href="/resellers" className="text-blue-600 hover:text-blue-700 mt-4 inline-block">
               Retour à la liste
             </Link>
           </div>
@@ -82,7 +82,7 @@ export default function ResellerDetailPage() {
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <Link 
-            href="/revendeurs"
+            href="/resellers"
             className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition-colors mb-4"
           >
             <ArrowLeft className="w-4 h-4" />

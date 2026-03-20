@@ -12,6 +12,7 @@ import Link from "next/link";
 import { Header } from "@/components/Header";
 import { Navigation } from "@/components/Navigation";
 import { isAuthenticated } from "@/lib/auth";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
@@ -29,20 +30,11 @@ const GasBottleIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 interface Summary {
-  resellers: number;
-  deliveryCompanies: number;
-  promotions: number;
-  activePromotions: number;
-  qrScans: number;
-  products: number;
-  documents: number;
+  resellers: number; deliveryCompanies: number; promotions: number;
+  activePromotions: number; qrScans: number; products: number; documents: number;
 }
-
 interface EvolutionPoint { date: string; count: number; }
-
 interface QrScan {
   id: string; scanned_at: string; country: string; city: string;
   os: string; browser: string; device_type: string; ip_address: string;
@@ -55,36 +47,27 @@ const PERIODS: { label: string; value: PeriodKey }[] = [
   { label: "7 jours", value: "7" }, { label: "30 jours", value: "30" },
   { label: "90 jours", value: "90" }, { label: "1 an", value: "365" },
 ];
-
 const CHART_COLORS = {
-  resellers: VITOGAZ_GREEN,
-  "delivery-companies": "#10B981",
-  promotions: "#F59E0B",
-  "qr-scans": "#8B5CF6",
+  resellers: VITOGAZ_GREEN, "delivery-companies": "#10B981",
+  promotions: "#F59E0B", "qr-scans": "#8B5CF6",
 };
-
 const OS_COLORS = [VITOGAZ_GREEN, "#10B981", "#F59E0B", "#8B5CF6", "#EF4444"];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatDate(dateStr: string, days: number): string {
   const date = new Date(dateStr);
   if (days <= 90) return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
   return date.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" });
 }
-
 function aggregateByWeek(data: EvolutionPoint[]): EvolutionPoint[] {
   const weeks: Record<string, number> = {};
   data.forEach(({ date, count }) => {
-    const d = new Date(date);
-    const s = new Date(d);
+    const d = new Date(date); const s = new Date(d);
     s.setDate(d.getDate() - d.getDay());
     const key = s.toISOString().split("T")[0];
     weeks[key] = (weeks[key] || 0) + count;
   });
   return Object.entries(weeks).map(([date, count]) => ({ date, count }));
 }
-
 function computeTrend(data: EvolutionPoint[]): { value: number; positive: boolean | null } {
   if (data.length < 2) return { value: 0, positive: null };
   const half = Math.floor(data.length / 2);
@@ -94,8 +77,6 @@ function computeTrend(data: EvolutionPoint[]): { value: number; positive: boolea
   const pct = Math.round(((second - first) / first) * 100);
   return { value: Math.abs(pct), positive: pct >= 0 };
 }
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function StatCardSkeleton() {
   return (
@@ -111,7 +92,6 @@ function StatCardSkeleton() {
     </Card>
   );
 }
-
 function TrendBadge({ trend }: { trend: { value: number; positive: boolean | null } }) {
   if (trend.positive === null) return <span className="text-xs text-gray-400">—</span>;
   if (trend.positive) return (
@@ -125,7 +105,6 @@ function TrendBadge({ trend }: { trend: { value: number; positive: boolean | nul
     </span>
   );
 }
-
 function PeriodSelector({ value, onChange }: { value: PeriodKey; onChange: (v: PeriodKey) => void }) {
   return (
     <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
@@ -138,7 +117,6 @@ function PeriodSelector({ value, onChange }: { value: PeriodKey; onChange: (v: P
     </div>
   );
 }
-
 function EvolutionCard({ title, entity, color, period, onPeriodChange, data, loading }: {
   title: string; entity: EntityKey; color: string; period: PeriodKey;
   onPeriodChange: (v: PeriodKey) => void; data: EvolutionPoint[]; loading: boolean;
@@ -190,19 +168,16 @@ function EvolutionCard({ title, entity, color, period, onPeriodChange, data, loa
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
-
 export default function DashboardPage() {
   const router = useRouter();
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+  const { canWrite, canDelete } = useCurrentUser();
 
-  // Un seul state pour toutes les stat cards
   const [summary, setSummary] = useState<Summary>({
     resellers: 0, deliveryCompanies: 0, promotions: 0,
     activePromotions: 0, qrScans: 0, products: 0, documents: 0,
   });
   const [summaryLoading, setSummaryLoading] = useState(true);
-
   const [evolutionData, setEvolutionData] = useState<Record<EntityKey, EvolutionPoint[]>>({
     resellers: [], "delivery-companies": [], promotions: [], "qr-scans": [],
   });
@@ -212,12 +187,9 @@ export default function DashboardPage() {
   const [periods, setPeriods] = useState<Record<EntityKey, PeriodKey>>({
     resellers: "30", "delivery-companies": "30", promotions: "30", "qr-scans": "30",
   });
-
   const [qrScans, setQrScans] = useState<QrScan[]>([]);
   const [qrLoading, setQrLoading] = useState(true);
   const [qrPage, setQrPage] = useState(1);
-
-  // ── Fetch helpers ─────────────────────────────────────────────────────────
 
   const fetchSummary = useCallback(async () => {
     try {
@@ -249,7 +221,6 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push("/login"); return; }
-    // 2 appels au lieu de 7 — summary remplace fetchStats
     fetchSummary();
     fetchQrScans();
     (["resellers", "delivery-companies", "promotions", "qr-scans"] as EntityKey[]).forEach(
@@ -263,21 +234,16 @@ export default function DashboardPage() {
   };
 
   const osCounts = qrScans.reduce<Record<string, number>>((acc, s) => {
-    acc[s.os || "Unknown"] = (acc[s.os || "Unknown"] || 0) + 1;
-    return acc;
+    acc[s.os || "Unknown"] = (acc[s.os || "Unknown"] || 0) + 1; return acc;
   }, {});
   const osData = Object.entries(osCounts).map(([name, value]) => ({ name, value }));
-
   const deviceCounts = qrScans.reduce<Record<string, number>>((acc, s) => {
-    acc[s.device_type || "Unknown"] = (acc[s.device_type || "Unknown"] || 0) + 1;
-    return acc;
+    acc[s.device_type || "Unknown"] = (acc[s.device_type || "Unknown"] || 0) + 1; return acc;
   }, {});
   const deviceData = Object.entries(deviceCounts).map(([name, value]) => ({ name, value }));
-
   const qrTotalPages = Math.ceil(qrScans.length / QR_PAGE_SIZE);
   const paginatedQrScans = qrScans.slice((qrPage - 1) * QR_PAGE_SIZE, qrPage * QR_PAGE_SIZE);
 
-  // Toutes les valeurs viennent du summary — 1 seul appel API
   const statCards = [
     { title: "Revendeurs", value: summary.resellers, icon: Building2, href: "/resellers", color: "text-teal-700", bgColor: "bg-teal-50" },
     { title: "Produits", value: summary.products, icon: GasBottleIcon, href: "/products", color: "text-teal-700", bgColor: "bg-teal-50" },
@@ -287,6 +253,46 @@ export default function DashboardPage() {
     { title: "Scans QR Code", value: summary.qrScans, icon: QrCode, href: "#qr-stats", color: "text-violet-600", bgColor: "bg-violet-50" },
   ];
 
+  // ── Actions rapides — libellés adaptés selon le rôle ─────────────────────
+  const quickActions = [
+    {
+      href: "/resellers",
+      bg: "bg-teal-50 hover:bg-teal-100", title: "text-teal-900", sub: "text-teal-700",
+      label: canDelete ? "Ajouter un Revendeur" : canWrite ? "Gérer les Revendeurs" : "Voir les Revendeurs",
+      desc: canDelete ? "Créer une nouvelle fiche revendeur" : canWrite ? "Modifier les fiches revendeurs" : "Consulter la liste des revendeurs",
+    },
+    {
+      href: "/products",
+      bg: "bg-teal-50 hover:bg-teal-100", title: "text-teal-900", sub: "text-teal-700",
+      label: canDelete ? "Ajouter un Produit" : canWrite ? "Gérer les Produits" : "Voir les Produits",
+      desc: canDelete ? "Créer un nouveau produit avec image" : canWrite ? "Modifier les fiches produits" : "Consulter le catalogue produits",
+    },
+    {
+      href: "/promotions",
+      bg: "bg-orange-50 hover:bg-orange-100", title: "text-orange-900", sub: "text-orange-700",
+      label: canDelete ? "Nouvelle Promotion" : canWrite ? "Gérer les Promotions" : "Voir les Promotions",
+      desc: canDelete ? "Lancer une campagne promotionnelle" : canWrite ? "Modifier les promotions en cours" : "Consulter les promotions actives",
+    },
+    {
+      href: "/documents",
+      bg: "bg-purple-50 hover:bg-purple-100", title: "text-purple-900", sub: "text-purple-700",
+      label: canDelete ? "Uploader un Document" : canWrite ? "Gérer les Documents" : "Voir les Documents",
+      desc: canDelete ? "Ajouter PAMF, guides, procédures" : canWrite ? "Modifier les documents existants" : "Consulter les documents disponibles",
+    },
+    {
+      href: "/zones",
+      bg: "bg-cyan-50 hover:bg-cyan-100", title: "text-cyan-900", sub: "text-cyan-700",
+      label: "Gérer les Zones",
+      desc: "Villes et provinces de Madagascar",
+    },
+    {
+      href: "/admin/settings",
+      bg: "bg-indigo-50 hover:bg-indigo-100", title: "text-indigo-900", sub: "text-indigo-700",
+      label: "⚙️ Paramètres",
+      desc: "Bannière, textes et statistiques homepage",
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header title="VITOBYVITOGAZ" subtitle="BACKOFFICE" />
@@ -294,7 +300,6 @@ export default function DashboardPage() {
 
       <main className="p-6 space-y-8 max-w-screen-2xl mx-auto">
 
-        {/* ── Stat Cards — skeleton pendant le chargement ── */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {summaryLoading
             ? Array.from({ length: 6 }).map((_, i) => <StatCardSkeleton key={i} />)
@@ -319,7 +324,6 @@ export default function DashboardPage() {
               })}
         </div>
 
-        {/* ── Évolutions ── */}
         <div>
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Évolutions</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -330,7 +334,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ── QR Code Stats Detail ── */}
         <div id="qr-stats">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Analyse des Scans QR</h2>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -356,7 +359,6 @@ export default function DashboardPage() {
                   )}
               </CardContent>
             </Card>
-
             <Card className="border border-gray-100 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-semibold text-gray-800 flex items-center gap-2">
@@ -381,7 +383,6 @@ export default function DashboardPage() {
                   )}
               </CardContent>
             </Card>
-
             <Card className="border border-gray-100 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-semibold text-gray-800 flex items-center gap-2">
@@ -394,8 +395,7 @@ export default function DashboardPage() {
                     <div className="space-y-2 mt-2">
                       {Object.entries(qrScans.reduce<Record<string, number>>((acc, s) => {
                         const key = s.city && s.city !== "Unknown" ? `${s.city}, ${s.country}` : s.country || "Unknown";
-                        acc[key] = (acc[key] || 0) + 1;
-                        return acc;
+                        acc[key] = (acc[key] || 0) + 1; return acc;
                       }, {})).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([location, count], i) => (
                         <div key={i} className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -488,19 +488,11 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* ── Bottom Row ── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="border border-gray-100 shadow-sm">
             <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Activity className="w-5 h-5" />Actions Rapides</CardTitle></CardHeader>
             <CardContent className="space-y-2">
-              {[
-                { href: "/resellers", bg: "bg-teal-50 hover:bg-teal-100", title: "text-teal-900", sub: "text-teal-700", label: "Ajouter un Revendeur", desc: "Créer une nouvelle fiche revendeur" },
-                { href: "/products", bg: "bg-teal-50 hover:bg-teal-100", title: "text-teal-900", sub: "text-teal-700", label: "Ajouter un Produit", desc: "Créer un nouveau produit avec image" },
-                { href: "/promotions", bg: "bg-orange-50 hover:bg-orange-100", title: "text-orange-900", sub: "text-orange-700", label: "Nouvelle Promotion", desc: "Lancer une campagne promotionnelle" },
-                { href: "/documents", bg: "bg-purple-50 hover:bg-purple-100", title: "text-purple-900", sub: "text-purple-700", label: "Uploader un Document", desc: "Ajouter PAMF, guides, procédures" },
-                { href: "/zones", bg: "bg-cyan-50 hover:bg-cyan-100", title: "text-cyan-900", sub: "text-cyan-700", label: "Gérer les Zones", desc: "Villes et provinces de Madagascar" },
-                { href: "/admin/settings", bg: "bg-indigo-50 hover:bg-indigo-100", title: "text-indigo-900", sub: "text-indigo-700", label: "⚙️ Paramètres", desc: "Bannière, textes et statistiques homepage" },
-              ].map((a) => (
+              {quickActions.map((a) => (
                 <Link key={a.href} href={a.href} className={`block p-3 ${a.bg} rounded-lg transition-colors`}>
                   <div className={`font-semibold text-sm ${a.title}`}>{a.label}</div>
                   <div className={`text-xs ${a.sub} mt-0.5`}>{a.desc}</div>

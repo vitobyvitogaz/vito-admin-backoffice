@@ -9,13 +9,13 @@ interface CurrentUser {
   role: UserRole;
   email: string | null;
   isSuperAdmin: boolean;
-  isAdmin: boolean;       // ADMIN ou SUPER_ADMIN
-  isEditor: boolean;      // EDITOR, ADMIN ou SUPER_ADMIN
-  canRead: boolean;       // tous sauf API_CLIENT
-  canWrite: boolean;      // ADMIN ou SUPER_ADMIN
-  canDelete: boolean;     // ADMIN ou SUPER_ADMIN
+  isAdmin: boolean;        // ADMIN ou SUPER_ADMIN
+  isEditor: boolean;       // EDITOR, ADMIN ou SUPER_ADMIN
+  canRead: boolean;        // tous sauf API_CLIENT
+  canWrite: boolean;       // EDITOR, ADMIN ou SUPER_ADMIN
+  canDelete: boolean;      // ADMIN ou SUPER_ADMIN
   canManageUsers: boolean; // SUPER_ADMIN uniquement
-  canViewAudit: boolean;  // SUPER_ADMIN uniquement
+  canViewAudit: boolean;   // SUPER_ADMIN uniquement
 }
 
 export function useCurrentUser(): CurrentUser {
@@ -31,8 +31,8 @@ export function useCurrentUser(): CurrentUser {
   const isAdmin = role === "SUPER_ADMIN" || role === "ADMIN";
   const isEditor = role === "SUPER_ADMIN" || role === "ADMIN" || role === "EDITOR";
   const canRead = role !== null && role !== "API_CLIENT";
-  const canWrite = isAdmin;
-  const canDelete = isAdmin;
+  const canWrite = isEditor;  // ← correction : EDITOR peut modifier
+  const canDelete = isAdmin;  // ADMIN+ uniquement
   const canManageUsers = isSuperAdmin;
   const canViewAudit = isSuperAdmin;
 
