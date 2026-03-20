@@ -31,6 +31,7 @@ import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { toast } from "@/lib/use-toast";
 import { Header } from "@/components/Header";
 import { Navigation } from "@/components/Navigation";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 
 const VITOGAZ_GREEN = "#008B7F";
 
@@ -42,13 +43,16 @@ interface Document {
   description: string | null;
   category: string;
   file_url: string;
-  video_url?: string | null; // Pour les vidéos YouTube — évolution future
+  video_url?: string | null;
   download_count: number;
   is_offline: boolean;
   is_active: boolean;
 }
 
 export default function DocumentsPage() {
+  // ── Permissions RBAC ─────────────────────────────────────────────────────
+  const { canWrite, canDelete } = useCurrentUser();
+
   const [documents, setDocuments] = useState<Document[]>([]);
   const [filteredDocuments, setFilteredDocuments] = useState<Document[]>([]);
   const [sortedDocuments, setSortedDocuments] = useState<Document[]>([]);
@@ -209,7 +213,6 @@ export default function DocumentsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation selon le type
     if (!isVideoCategory && !formData.file_url && !editingId) {
       toast({ title: "Erreur", description: "Veuillez sélectionner un fichier PDF", variant: "destructive" });
       return;
@@ -297,7 +300,6 @@ export default function DocumentsPage() {
     return labels[category] || category;
   };
 
-  // Ouvre PDF ou vidéo YouTube selon le type
   const handleView = (doc: Document) => {
     const url = doc.video_url || doc.file_url;
     if (url) window.open(url, "_blank");
@@ -326,14 +328,17 @@ export default function DocumentsPage() {
               <p className="text-sm text-gray-500">{documents.length} document(s) au total</p>
             </div>
           </div>
-          <Button onClick={() => setShowForm(!showForm)} className="gap-2 text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
-            <Plus className="w-4 h-4" />
-            {showForm ? "Annuler" : "Nouveau Document"}
-          </Button>
+          {/* Bouton Nouveau — ADMIN/SUPER_ADMIN uniquement */}
+          {canDelete && (
+            <Button onClick={() => setShowForm(!showForm)} className="gap-2 text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
+              <Plus className="w-4 h-4" />
+              {showForm ? "Annuler" : "Nouveau Document"}
+            </Button>
+          )}
         </div>
 
-        {/* Form */}
-        {showForm && (
+        {/* Form — ADMIN/SUPER_ADMIN uniquement */}
+        {showForm && canDelete && (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>{editingId ? "Modifier le Document" : "Nouveau Document"}</CardTitle>
@@ -501,18 +506,25 @@ export default function DocumentsPage() {
                     {/* Actions */}
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        {/* Voir — toujours visible */}
                         <Button variant="outline" size="sm" onClick={() => handleView(doc)} title={doc.category === "video" ? "Voir la vidéo" : "Voir le PDF"}>
                           {doc.category === "video"
                             ? <Youtube className="w-4 h-4 text-rose-600" />
                             : <Eye className="w-4 h-4" />
                           }
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleEdit(doc)}>
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button variant="destructive" size="sm" onClick={() => handleDelete(doc.id)}>
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        {/* Modifier — EDITOR et ADMIN+ */}
+                        {canWrite && (
+                          <Button variant="outline" size="sm" onClick={() => handleEdit(doc)}>
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {/* Supprimer — ADMIN/SUPER_ADMIN uniquement */}
+                        {canDelete && (
+                          <Button variant="destructive" size="sm" onClick={() => handleDelete(doc.id)}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

@@ -32,11 +32,11 @@ import { toast } from "@/lib/use-toast";
 import { ZoneSelector } from "@/components/ZoneSelector";
 import { Header } from "@/components/Header";
 import { Navigation } from "@/components/Navigation";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 
 const API_URL = 'https://vito-backend-supabase.onrender.com/api/v1';
 const VITOGAZ_GREEN = "#008B7F";
 
-// "status" retiré des SortKey — colonne Statut supprimée
 type SortKey = "title" | "discount" | "validity" | "zones" | "usage";
 
 interface Promotion {
@@ -62,6 +62,9 @@ interface Promotion {
 }
 
 export default function PromotionsPage() {
+  // ── Permissions RBAC ─────────────────────────────────────────────────────
+  const { canWrite, canDelete } = useCurrentUser();
+
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [filteredPromotions, setFilteredPromotions] = useState<Promotion[]>([]);
   const [sortedPromotions, setSortedPromotions] = useState<Promotion[]>([]);
@@ -314,6 +317,7 @@ export default function PromotionsPage() {
 
   // Toggle is_active — fetchPromotions() pour forcer le rafraîchissement
   const handleToggleActive = async (promo: Promotion) => {
+    if (!canWrite) return;
     setTogglingId(promo.id);
     try {
       await apiPatch(`/promotions/${promo.id}`, { is_active: !promo.is_active });
@@ -367,6 +371,9 @@ export default function PromotionsPage() {
     { key: "usage", label: "Utilisations" },
   ];
 
+  // Nombre de colonnes selon les droits
+  const colSpan = 8 + (canWrite ? 1 : 0);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header title="VIto Admin" subtitle="Gestion des Promotions" />
@@ -385,14 +392,17 @@ export default function PromotionsPage() {
               </p>
             </div>
           </div>
-          <Button onClick={() => setShowForm(!showForm)} className="gap-2 text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
-            <Plus className="w-4 h-4" />
-            {showForm ? "Annuler" : "Nouvelle Promotion"}
-          </Button>
+          {/* Bouton Nouveau — ADMIN/SUPER_ADMIN uniquement */}
+          {canDelete && (
+            <Button onClick={() => setShowForm(!showForm)} className="gap-2 text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
+              <Plus className="w-4 h-4" />
+              {showForm ? "Annuler" : "Nouvelle Promotion"}
+            </Button>
+          )}
         </div>
 
-        {/* Form */}
-        {showForm && (
+        {/* Form — ADMIN/SUPER_ADMIN uniquement */}
+        {showForm && canDelete && (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>{editingId ? "Modifier la Promotion" : "Nouvelle Promotion"}</CardTitle>
@@ -593,18 +603,18 @@ export default function PromotionsPage() {
                   );
                 })}
                 <TableHead>Code</TableHead>
-                <TableHead>Activer</TableHead>
+                {/* Colonne Activer — EDITOR et ADMIN+ */}
+                {canWrite && <TableHead>Activer</TableHead>}
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={9} className="text-center py-8">Chargement...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={colSpan} className="text-center py-8">Chargement...</TableCell></TableRow>
               ) : sortedPromotions.length === 0 ? (
-                <TableRow><TableCell colSpan={9} className="text-center py-8">Aucune promotion trouvée</TableCell></TableRow>
+                <TableRow><TableCell colSpan={colSpan} className="text-center py-8">Aucune promotion trouvée</TableCell></TableRow>
               ) : (
                 sortedPromotions.map((promo) => (
-                  //<TableRow key={promo.id} className={!isEffectivelyActive(promo) ? "opacity-60" : ""}>
                   <TableRow key={promo.id} className={!promo.is_active ? "opacity-50" : ""}>
                     {/* Image */}
                     <TableCell>
@@ -669,27 +679,35 @@ export default function PromotionsPage() {
                         <span className="text-gray-400 text-xs">-</span>
                       )}
                     </TableCell>
-                    {/* Toggle is_active */}
-                    <TableCell>
-                      <button
-                        onClick={() => handleToggleActive(promo)}
-                        disabled={togglingId === promo.id}
-                        title={promo.is_active ? "Désactiver" : "Activer"}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                          togglingId === promo.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
-                        }`}
-                        style={{ backgroundColor: promo.is_active ? VITOGAZ_GREEN : "#D1D5DB" }}
-                      >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          promo.is_active ? "translate-x-6" : "translate-x-1"
-                        }`} />
-                      </button>
-                    </TableCell>
+                    {/* Toggle is_active — EDITOR et ADMIN+ */}
+                    {canWrite && (
+                      <TableCell>
+                        <button
+                          onClick={() => handleToggleActive(promo)}
+                          disabled={togglingId === promo.id}
+                          title={promo.is_active ? "Désactiver" : "Activer"}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                            togglingId === promo.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                          }`}
+                          style={{ backgroundColor: promo.is_active ? VITOGAZ_GREEN : "#D1D5DB" }}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            promo.is_active ? "translate-x-6" : "translate-x-1"
+                          }`} />
+                        </button>
+                      </TableCell>
+                    )}
                     {/* Actions */}
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="sm" onClick={() => handleEdit(promo)}><Edit className="w-4 h-4" /></Button>
-                        <Button variant="destructive" size="sm" onClick={() => handleDelete(promo.id)}><Trash2 className="w-4 h-4" /></Button>
+                        {/* Modifier — EDITOR et ADMIN+ */}
+                        {canWrite && (
+                          <Button variant="outline" size="sm" onClick={() => handleEdit(promo)}><Edit className="w-4 h-4" /></Button>
+                        )}
+                        {/* Supprimer — ADMIN/SUPER_ADMIN uniquement */}
+                        {canDelete && (
+                          <Button variant="destructive" size="sm" onClick={() => handleDelete(promo.id)}><Trash2 className="w-4 h-4" /></Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

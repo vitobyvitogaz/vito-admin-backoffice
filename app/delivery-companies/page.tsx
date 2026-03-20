@@ -36,6 +36,7 @@ import { ZoneSelector } from "@/components/ZoneSelector";
 import { exportToCSV } from "@/lib/export-csv";
 import { Header } from "@/components/Header";
 import { Navigation } from "@/components/Navigation";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://vito-backend-supabase.onrender.com/api/v1';
 const PAGE_SIZE = 50;
@@ -68,6 +69,9 @@ interface DeliveryCompany {
 }
 
 export default function DeliveryCompaniesPage() {
+  // ── Permissions RBAC ─────────────────────────────────────────────────────
+  const { canWrite, canDelete } = useCurrentUser();
+
   const [companies, setCompanies] = useState<DeliveryCompany[]>([]);
   const [filteredCompanies, setFilteredCompanies] = useState<DeliveryCompany[]>([]);
   const [sortedCompanies, setSortedCompanies] = useState<DeliveryCompany[]>([]);
@@ -242,6 +246,7 @@ export default function DeliveryCompaniesPage() {
   };
 
   const handleToggleActive = async (company: DeliveryCompany) => {
+    if (!canWrite) return;
     setTogglingId(company.id);
     try {
       const response = await fetch(`${API_URL}/delivery-companies/${company.id}`, {
@@ -388,15 +393,18 @@ export default function DeliveryCompaniesPage() {
               <Download className="w-4 h-4" />
               Exporter CSV
             </Button>
-            <Button onClick={() => setShowForm(!showForm)} className="gap-2 text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
-              <Plus className="w-4 h-4" />
-              {showForm ? "Annuler" : "Nouvelle Société"}
-            </Button>
+            {/* Bouton Nouveau — ADMIN/SUPER_ADMIN uniquement */}
+            {canDelete && (
+              <Button onClick={() => setShowForm(!showForm)} className="gap-2 text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
+                <Plus className="w-4 h-4" />
+                {showForm ? "Annuler" : "Nouvelle Société"}
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* Form */}
-        {showForm && (
+        {/* Form — ADMIN/SUPER_ADMIN uniquement */}
+        {showForm && canDelete && (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>{editingId ? "Modifier la Société" : "Nouvelle Société"}</CardTitle>
@@ -570,21 +578,24 @@ export default function DeliveryCompaniesPage() {
                 >
                   <span className="flex items-center gap-1">Note<SortIcon column="rating" /></span>
                 </TableHead>
-                <TableHead
-                  className="cursor-pointer select-none transition-colors hover:bg-gray-50"
-                  onClick={() => handleSort("is_active")}
-                  style={sortColumn === "is_active" ? { backgroundColor: "#f0faf9", color: VITOGAZ_GREEN } : {}}
-                >
-                  <span className="flex items-center gap-1">Actif<SortIcon column="is_active" /></span>
-                </TableHead>
+                {/* Colonne Actif — visible seulement si canWrite */}
+                {canWrite && (
+                  <TableHead
+                    className="cursor-pointer select-none transition-colors hover:bg-gray-50"
+                    onClick={() => handleSort("is_active")}
+                    style={sortColumn === "is_active" ? { backgroundColor: "#f0faf9", color: VITOGAZ_GREEN } : {}}
+                  >
+                    <span className="flex items-center gap-1">Actif<SortIcon column="is_active" /></span>
+                  </TableHead>
+                )}
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={9} className="text-center py-8">Chargement...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={canWrite ? 9 : 8} className="text-center py-8">Chargement...</TableCell></TableRow>
               ) : paginatedCompanies.length === 0 ? (
-                <TableRow><TableCell colSpan={9} className="text-center py-8">Aucune société trouvée</TableCell></TableRow>
+                <TableRow><TableCell colSpan={canWrite ? 9 : 8} className="text-center py-8">Aucune société trouvée</TableCell></TableRow>
               ) : (
                 paginatedCompanies.map((company) => (
                   <TableRow key={company.id} className={!company.is_active ? "opacity-50" : ""}>
@@ -598,7 +609,7 @@ export default function DeliveryCompaniesPage() {
                         </div>
                       )}
                     </TableCell>
-                    {/* Nom — largeur réduite */}
+                    {/* Nom */}
                     <TableCell className="w-36">
                       <div className="flex flex-col">
                         <span className="font-medium text-sm leading-tight">{company.name}</span>
@@ -607,7 +618,7 @@ export default function DeliveryCompaniesPage() {
                         )}
                       </div>
                     </TableCell>
-                    {/* Contact — sans icônes */}
+                    {/* Contact */}
                     <TableCell>
                       <div className="flex flex-col gap-0.5 text-xs text-gray-600">
                         <span className="font-medium">{company.phone}</span>
@@ -615,7 +626,7 @@ export default function DeliveryCompaniesPage() {
                         {company.email && <span className="text-gray-400">{company.email}</span>}
                       </div>
                     </TableCell>
-                    {/* Zones — sans icône MapPin */}
+                    {/* Zones */}
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {company.service_areas && company.service_areas.length > 0 ? (
@@ -641,7 +652,7 @@ export default function DeliveryCompaniesPage() {
                         {company.delivery_fee && <div>💰 {company.delivery_fee}</div>}
                       </div>
                     </TableCell>
-                    {/* Statut — vérifiée */}
+                    {/* Statut */}
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         {company.is_verified && (
@@ -667,22 +678,30 @@ export default function DeliveryCompaniesPage() {
                         <span className="text-gray-400 text-xs">-</span>
                       )}
                     </TableCell>
-                    {/* Toggle is_active */}
-                    <TableCell>
-                      <button
-                        onClick={() => handleToggleActive(company)}
-                        disabled={togglingId === company.id}
-                        title={company.is_active ? "Désactiver" : "Activer"}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${togglingId === company.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-                        style={{ backgroundColor: company.is_active ? VITOGAZ_GREEN : "#D1D5DB" }}
-                      >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${company.is_active ? "translate-x-6" : "translate-x-1"}`} />
-                      </button>
-                    </TableCell>
+                    {/* Toggle is_active — EDITOR et ADMIN+ */}
+                    {canWrite && (
+                      <TableCell>
+                        <button
+                          onClick={() => handleToggleActive(company)}
+                          disabled={togglingId === company.id}
+                          title={company.is_active ? "Désactiver" : "Activer"}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${togglingId === company.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                          style={{ backgroundColor: company.is_active ? VITOGAZ_GREEN : "#D1D5DB" }}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${company.is_active ? "translate-x-6" : "translate-x-1"}`} />
+                        </button>
+                      </TableCell>
+                    )}
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="sm" onClick={() => handleEdit(company)}><Edit className="w-4 h-4" /></Button>
-                        <Button variant="destructive" size="sm" onClick={() => handleDelete(company.id)}><Trash2 className="w-4 h-4" /></Button>
+                        {/* Modifier — EDITOR et ADMIN+ */}
+                        {canWrite && (
+                          <Button variant="outline" size="sm" onClick={() => handleEdit(company)}><Edit className="w-4 h-4" /></Button>
+                        )}
+                        {/* Supprimer — ADMIN/SUPER_ADMIN uniquement */}
+                        {canDelete && (
+                          <Button variant="destructive" size="sm" onClick={() => handleDelete(company.id)}><Trash2 className="w-4 h-4" /></Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

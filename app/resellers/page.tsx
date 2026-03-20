@@ -35,6 +35,7 @@ import { toast } from "@/lib/use-toast";
 import { exportToCSV } from "@/lib/export-csv";
 import { Header } from "@/components/Header";
 import { Navigation } from "@/components/Navigation";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 
 const PAGE_SIZE = 50;
 const VITOGAZ_GREEN = "#008B7F";
@@ -82,6 +83,9 @@ interface Reseller {
 }
 
 export default function ResellersPage() {
+  // ── Permissions RBAC ─────────────────────────────────────────────────────
+  const { canWrite, canDelete } = useCurrentUser();
+
   const [resellers, setResellers] = useState<Reseller[]>([]);
   const [filteredResellers, setFilteredResellers] = useState<Reseller[]>([]);
   const [sortedResellers, setSortedResellers] = useState<Reseller[]>([]);
@@ -193,7 +197,6 @@ export default function ResellersPage() {
 
   const fetchResellers = async () => {
     try {
-      // Les produits sont déjà inclus dans la réponse via reseller_products
       const data = await apiGet<Reseller[]>('/resellers');
       setResellers(data);
       setFilteredResellers(data);
@@ -234,6 +237,7 @@ export default function ResellersPage() {
   };
 
   const handleToggleActive = async (reseller: Reseller) => {
+    if (!canWrite) return;
     setTogglingId(reseller.id);
     try {
       await apiPatch(`/resellers/${reseller.id}`, { is_active: !reseller.is_active });
@@ -272,7 +276,6 @@ export default function ResellersPage() {
     });
   };
 
-  // Utilise les produits déjà inclus dans les données du revendeur
   const getCategoryBadges = (reseller: Reseller) => {
     const items = (reseller.reseller_products || []).filter(rp => rp.products?.is_active);
     if (items.length === 0) return null;
@@ -418,19 +421,22 @@ export default function ResellersPage() {
               <Download className="w-4 h-4" />
               Exporter CSV
             </Button>
-            <Button
-              onClick={() => setShowForm(!showForm)}
-              className="gap-2 text-white"
-              style={{ backgroundColor: VITOGAZ_GREEN }}
-            >
-              <Plus className="w-4 h-4" />
-              {showForm ? "Annuler" : "Nouveau Revendeur"}
-            </Button>
+            {/* Bouton Nouveau — ADMIN/SUPER_ADMIN uniquement */}
+            {canDelete && (
+              <Button
+                onClick={() => setShowForm(!showForm)}
+                className="gap-2 text-white"
+                style={{ backgroundColor: VITOGAZ_GREEN }}
+              >
+                <Plus className="w-4 h-4" />
+                {showForm ? "Annuler" : "Nouveau Revendeur"}
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* Form */}
-        {showForm && (
+        {/* Form — ADMIN/SUPER_ADMIN uniquement */}
+        {showForm && canDelete && (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>{editingId ? "Modifier le Revendeur" : "Nouveau Revendeur"}</CardTitle>
@@ -490,7 +496,6 @@ export default function ResellersPage() {
                 {/* Produits vendus */}
                 <div>
                   <div className="flex items-center gap-2 mb-4">
-                    {/*<GasBottleIcon className="w-5 h-5" style={{ color: VITOGAZ_GREEN } as React.CSSProperties} />*/}
                     <GasBottleIcon className="w-5 h-5" style={{ color: VITOGAZ_GREEN }} />
                     <h3 className="text-lg font-semibold">Produits vendus</h3>
                     <span className="text-sm text-gray-500">
@@ -571,28 +576,30 @@ export default function ResellersPage() {
                 })}
                 <TableHead>Produits</TableHead>
                 <TableHead>Contact</TableHead>
-                {/* Colonne Actif — triable */}
-                <TableHead
-                  onClick={() => handleSort("is_active")}
-                  className="cursor-pointer select-none transition-colors hover:bg-gray-50"
-                  style={sortColumn === "is_active" ? { backgroundColor: "#f0faf9", color: VITOGAZ_GREEN } : {}}
-                >
-                  <span className="flex items-center gap-1">
-                    Actif
-                    <SortIcon column="is_active" />
-                  </span>
-                </TableHead>
+                {/* Colonne Actif — visible seulement si canWrite */}
+                {canWrite && (
+                  <TableHead
+                    onClick={() => handleSort("is_active")}
+                    className="cursor-pointer select-none transition-colors hover:bg-gray-50"
+                    style={sortColumn === "is_active" ? { backgroundColor: "#f0faf9", color: VITOGAZ_GREEN } : {}}
+                  >
+                    <span className="flex items-center gap-1">
+                      Actif
+                      <SortIcon column="is_active" />
+                    </span>
+                  </TableHead>
+                )}
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">Chargement...</TableCell>
+                  <TableCell colSpan={canWrite ? 7 : 6} className="text-center py-8">Chargement...</TableCell>
                 </TableRow>
               ) : paginatedResellers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">Aucun revendeur trouvé</TableCell>
+                  <TableCell colSpan={canWrite ? 7 : 6} className="text-center py-8">Aucun revendeur trouvé</TableCell>
                 </TableRow>
               ) : (
                 paginatedResellers.map((reseller) => (
@@ -620,33 +627,44 @@ export default function ResellersPage() {
                         {reseller.phone}
                       </div>
                     </TableCell>
-                    {/* Toggle is_active */}
-                    <TableCell>
-                      <button
-                        onClick={() => handleToggleActive(reseller)}
-                        disabled={togglingId === reseller.id}
-                        title={reseller.is_active ? "Désactiver" : "Activer"}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                          togglingId === reseller.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
-                        }`}
-                        style={{ backgroundColor: reseller.is_active ? VITOGAZ_GREEN : "#D1D5DB" }}
-                      >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${reseller.is_active ? "translate-x-6" : "translate-x-1"}`} />
-                      </button>
-                    </TableCell>
+                    {/* Toggle is_active — EDITOR et ADMIN+ */}
+                    {canWrite && (
+                      <TableCell>
+                        <button
+                          onClick={() => handleToggleActive(reseller)}
+                          disabled={togglingId === reseller.id}
+                          title={reseller.is_active ? "Désactiver" : "Activer"}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                            togglingId === reseller.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                          }`}
+                          style={{ backgroundColor: reseller.is_active ? VITOGAZ_GREEN : "#D1D5DB" }}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${reseller.is_active ? "translate-x-6" : "translate-x-1"}`} />
+                        </button>
+                      </TableCell>
+                    )}
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Link href={`/resellers/${reseller.id}`}>
-                          <Button variant="outline" size="sm" title="Horaires et produits">
-                            <Clock className="w-4 h-4" />
+                        {/* Lien horaires — EDITOR et ADMIN+ */}
+                        {canWrite && (
+                          <Link href={`/resellers/${reseller.id}`}>
+                            <Button variant="outline" size="sm" title="Horaires et produits">
+                              <Clock className="w-4 h-4" />
+                            </Button>
+                          </Link>
+                        )}
+                        {/* Modifier — EDITOR et ADMIN+ */}
+                        {canWrite && (
+                          <Button variant="outline" size="sm" onClick={() => handleEdit(reseller)} title="Modifier">
+                            <Edit className="w-4 h-4" />
                           </Button>
-                        </Link>
-                        <Button variant="outline" size="sm" onClick={() => handleEdit(reseller)} title="Modifier">
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button variant="destructive" size="sm" onClick={() => handleDelete(reseller.id)} title="Supprimer">
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        )}
+                        {/* Supprimer — ADMIN/SUPER_ADMIN uniquement */}
+                        {canDelete && (
+                          <Button variant="destructive" size="sm" onClick={() => handleDelete(reseller.id)} title="Supprimer">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

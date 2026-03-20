@@ -33,6 +33,7 @@ import { uploadProductImage } from "@/lib/supabase";
 import { exportToCSV } from "@/lib/export-csv";
 import { Header } from "@/components/Header";
 import { Navigation } from "@/components/Navigation";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 
 const PAGE_SIZE = 50;
 const VITOGAZ_GREEN = "#008B7F";
@@ -66,6 +67,9 @@ interface Product {
 }
 
 export default function ProductsPage() {
+  // ── Permissions RBAC ─────────────────────────────────────────────────────
+  const { canWrite, canDelete } = useCurrentUser();
+
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [sortedProducts, setSortedProducts] = useState<Product[]>([]);
@@ -221,6 +225,7 @@ export default function ProductsPage() {
 
   // Toggle is_active directement dans le tableau
   const handleToggleActive = async (product: Product) => {
+    if (!canWrite) return;
     setTogglingId(product.id);
     try {
       await apiPatch(`/products/${product.id}`, { is_active: !product.is_active });
@@ -360,13 +365,13 @@ export default function ProductsPage() {
     setShowForm(false);
   };
 
-  // Colonnes triables
+  // Colonnes triables — colonne Actif exclue si VIEWER
   const sortableCols: { key: SortKey; label: string }[] = [
     { key: "product_code", label: "Code" },
     { key: "name", label: "Nom" },
     { key: "category", label: "Catégorie" },
     { key: "price", label: "Prix" },
-    { key: "is_active", label: "Actif" },
+    ...(canWrite ? [{ key: "is_active" as SortKey, label: "Actif" }] : []),
   ];
 
   return (
@@ -397,19 +402,22 @@ export default function ProductsPage() {
               <Download className="w-4 h-4" />
               Exporter CSV
             </Button>
-            <Button
-              onClick={() => setShowForm(!showForm)}
-              className="gap-2 text-white"
-              style={{ backgroundColor: VITOGAZ_GREEN }}
-            >
-              <Plus className="w-4 h-4" />
-              {showForm ? "Annuler" : "Nouveau Produit"}
-            </Button>
+            {/* Bouton Nouveau — ADMIN/SUPER_ADMIN uniquement */}
+            {canDelete && (
+              <Button
+                onClick={() => setShowForm(!showForm)}
+                className="gap-2 text-white"
+                style={{ backgroundColor: VITOGAZ_GREEN }}
+              >
+                <Plus className="w-4 h-4" />
+                {showForm ? "Annuler" : "Nouveau Produit"}
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* Form */}
-        {showForm && (
+        {/* Form — ADMIN/SUPER_ADMIN uniquement */}
+        {showForm && canDelete && (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>
@@ -588,13 +596,13 @@ export default function ProductsPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
+                  <TableCell colSpan={canWrite ? 7 : 6} className="text-center py-8">
                     Chargement...
                   </TableCell>
                 </TableRow>
               ) : paginatedProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
+                  <TableCell colSpan={canWrite ? 7 : 6} className="text-center py-8">
                     Aucun produit trouvé
                   </TableCell>
                 </TableRow>
@@ -631,24 +639,26 @@ export default function ProductsPage() {
                         <span className="text-gray-400">-</span>
                       )}
                     </TableCell>
-                    {/* Toggle is_active */}
-                    <TableCell>
-                      <button
-                        onClick={() => handleToggleActive(product)}
-                        disabled={togglingId === product.id}
-                        title={product.is_active ? "Désactiver" : "Activer"}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                          togglingId === product.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
-                        }`}
-                        style={{ backgroundColor: product.is_active ? VITOGAZ_GREEN : "#D1D5DB" }}
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            product.is_active ? "translate-x-6" : "translate-x-1"
+                    {/* Toggle is_active — EDITOR et ADMIN+ */}
+                    {canWrite && (
+                      <TableCell>
+                        <button
+                          onClick={() => handleToggleActive(product)}
+                          disabled={togglingId === product.id}
+                          title={product.is_active ? "Désactiver" : "Activer"}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                            togglingId === product.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
                           }`}
-                        />
-                      </button>
-                    </TableCell>
+                          style={{ backgroundColor: product.is_active ? VITOGAZ_GREEN : "#D1D5DB" }}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              product.is_active ? "translate-x-6" : "translate-x-1"
+                            }`}
+                          />
+                        </button>
+                      </TableCell>
+                    )}
                     <TableCell>
                       {product.is_featured ? (
                         <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">
@@ -660,20 +670,26 @@ export default function ProductsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEdit(product)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDelete(product.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        {/* Modifier — EDITOR et ADMIN+ */}
+                        {canWrite && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(product)}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {/* Supprimer — ADMIN/SUPER_ADMIN uniquement */}
+                        {canDelete && (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDelete(product.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
