@@ -27,13 +27,16 @@ interface AuditLog {
   user_id: string | null;
   user_email: string | null;
   user_role: string | null;
-  old_data: Record<string, unknown> | null;
-  new_data: Record<string, unknown> | null;
-  changes: Record<string, unknown> | null;
   ip_address: string | null;
-  user_agent: string | null;
-  metadata: Record<string, unknown> | null;
   created_at: string;
+}
+
+interface AuditResponse {
+  data: AuditLog[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 const ACTION_COLORS: Record<string, string> = {
@@ -59,7 +62,8 @@ export default function AuditPage() {
   const { canViewAudit, role } = useCurrentUser();
 
   const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [filteredLogs, setFilteredLogs] = useState<AuditLog[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [actionFilter, setActionFilter] = useState("ALL");
@@ -69,57 +73,47 @@ export default function AuditPage() {
     if (!isAuthenticated()) { router.push("/login"); return; }
   }, [router]);
 
-  // Redirection si pas SUPER_ADMIN — après hydratation du rôle
   useEffect(() => {
-    if (role !== null && !canViewAudit) {
-      router.push("/");
-    }
+    if (role !== null && !canViewAudit) router.push("/");
   }, [role, canViewAudit, router]);
 
-  const fetchLogs = useCallback(async () => {
+  const fetchLogs = useCallback(async (currentPage: number) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('vito_auth_token');
-      const res = await fetch(`${API_URL}/audit`, {
+      const res = await fetch(`${API_URL}/audit?page=${currentPage}&limit=${PAGE_SIZE}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Erreur chargement journal');
-      const data = await res.json();
-      setLogs(data || []);
-      setFilteredLogs(data || []);
+      const data: AuditResponse = await res.json();
+      setLogs(data.data || []);
+      setTotal(data.total || 0);
+      setTotalPages(data.totalPages || 0);
     } catch (e) {
       console.error(e);
       setLogs([]);
-      setFilteredLogs([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (canViewAudit) fetchLogs();
-  }, [canViewAudit, fetchLogs]);
+    if (canViewAudit) fetchLogs(page);
+  }, [canViewAudit, fetchLogs, page]);
 
-  useEffect(() => {
-    let filtered = logs;
-    if (actionFilter !== "ALL") {
-      filtered = filtered.filter((l) => l.action === actionFilter);
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      filtered = filtered.filter((l) =>
-        (l.user_email && l.user_email.toLowerCase().includes(q)) ||
-        (l.resource_type && l.resource_type.toLowerCase().includes(q)) ||
-        (l.resource_name && l.resource_name.toLowerCase().includes(q)) ||
-        (l.action && l.action.toLowerCase().includes(q))
-      );
-    }
-    setFilteredLogs(filtered);
-    setPage(1);
-  }, [searchQuery, actionFilter, logs]);
+  // Filtre local sur les résultats de la page courante
+  const filteredLogs = logs.filter((l) => {
+    const matchAction = actionFilter === "ALL" || l.action === actionFilter;
+    const matchSearch = !searchQuery.trim() || [l.user_email, l.resource_type, l.resource_name, l.action]
+      .some((v) => v && v.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchAction && matchSearch;
+  });
 
-  const totalPages = Math.ceil(filteredLogs.length / PAGE_SIZE);
-  const paginatedLogs = filteredLogs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    setSearchQuery("");
+    setActionFilter("ALL");
+  };
 
   if (role !== null && !canViewAudit) return null;
 
@@ -135,7 +129,7 @@ export default function AuditPage() {
             <ScrollText className="w-8 h-8" style={{ color: VITOGAZ_GREEN }} />
             <div>
               <h2 className="text-2xl font-bold">Journal d'audit</h2>
-              <p className="text-sm text-gray-500">{logs.length} entrée(s) au total</p>
+              <p className="text-sm text-gray-500">{total} entrée(s) au total</p>
             </div>
           </div>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-50 border border-red-100">
@@ -151,7 +145,7 @@ export default function AuditPage() {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
                 <Input
-                  placeholder="Rechercher par email, ressource, action..."
+                  placeholder="Filtrer par email, ressource, action..."
                   className="pl-10"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -189,10 +183,10 @@ export default function AuditPage() {
             <TableBody>
               {loading ? (
                 <TableRow><TableCell colSpan={6} className="text-center py-8">Chargement...</TableCell></TableRow>
-              ) : paginatedLogs.length === 0 ? (
+              ) : filteredLogs.length === 0 ? (
                 <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">Aucune entrée trouvée</TableCell></TableRow>
               ) : (
-                paginatedLogs.map((log) => (
+                filteredLogs.map((log) => (
                   <TableRow key={log.id} className="hover:bg-gray-50">
                     <TableCell className="text-xs text-gray-500 whitespace-nowrap">
                       {format(new Date(log.created_at), "dd/MM/yyyy HH:mm:ss")}
@@ -210,9 +204,9 @@ export default function AuditPage() {
                     </TableCell>
                     <TableCell className="text-sm text-gray-700">{log.user_email || "—"}</TableCell>
                     <TableCell>
-                      {log.user_role ? (
-                        <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">{log.user_role}</span>
-                      ) : "—"}
+                      {log.user_role
+                        ? <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">{log.user_role}</span>
+                        : "—"}
                     </TableCell>
                     <TableCell className="text-xs font-mono text-gray-400">{log.ip_address || "—"}</TableCell>
                   </TableRow>
@@ -221,20 +215,40 @@ export default function AuditPage() {
             </TableBody>
           </Table>
 
-          {/* Pagination */}
+          {/* Pagination backend */}
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 min-h-[52px]">
             <p className="text-sm text-gray-500">
-              {filteredLogs.length} entrée(s) {actionFilter !== "ALL" ? `— filtre: ${ACTION_LABELS[actionFilter]}` : ""}
+              Page {page} sur {totalPages} — {total} entrée(s) au total
             </p>
             {totalPages > 1 && (
               <div className="flex items-center gap-1">
-                <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
-                  className="w-8 h-8 rounded-md border border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-300 disabled:opacity-40 transition-colors">
+                <button
+                  onClick={() => handlePageChange(Math.max(1, page - 1))}
+                  disabled={page === 1}
+                  className="w-8 h-8 rounded-md border border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-300 disabled:opacity-40 transition-colors"
+                >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="text-sm text-gray-600 px-2">Page {page} / {totalPages}</span>
-                <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                  className="w-8 h-8 rounded-md border border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-300 disabled:opacity-40 transition-colors">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  const pageNum = Math.max(1, Math.min(page - 2 + i, totalPages - 4 + i));
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => handlePageChange(pageNum)}
+                      className="w-8 h-8 rounded-md text-sm font-medium transition-colors border"
+                      style={pageNum === page
+                        ? { backgroundColor: VITOGAZ_GREEN, color: "white", borderColor: VITOGAZ_GREEN }
+                        : { borderColor: "#e5e7eb", color: "#374151" }}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() => handlePageChange(Math.min(totalPages, page + 1))}
+                  disabled={page === totalPages}
+                  className="w-8 h-8 rounded-md border border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-300 disabled:opacity-40 transition-colors"
+                >
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>

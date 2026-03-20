@@ -226,7 +226,8 @@ export default function UsersPage() {
         {!canManageUsers && (
           <div className="mb-6 flex items-center gap-2 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
             <Lock className="w-4 h-4 flex-shrink-0" />
-            <span>Vous êtes en <strong>lecture seule</strong>. Seul un Super Admin peut créer, modifier ou supprimer des utilisateurs.</span>
+            {/*<span>Vous êtes en <strong>lecture seule</strong>. Seul un Super Admin peut créer, modifier ou supprimer des utilisateurs.</span>*/}
+            <span>Vous pouvez consulter la liste des utilisateurs. Seul un <strong>Super Admin</strong> peut créer, modifier ou supprimer des comptes utilisateurs.</span>
           </div>
         )}
 
