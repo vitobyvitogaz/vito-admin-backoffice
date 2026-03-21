@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -220,7 +220,7 @@ export default function ZonesPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header et Navigation communs */}
-      <Header title="Vito Admin" subtitle="Gestion des Zones" />
+      <Header title="Vito Admin" subtitle="GESTION DES ZONES" />
       <Navigation />
 
       <main className="p-6">
@@ -385,8 +385,9 @@ export default function ZonesPage() {
                 </TableRow>
               ) : (
                 <>
+                  {/* ── CORRECTION : <tbody> remplacé par <> pour éviter tbody imbriqués ── */}
                   {Object.entries(groupedZones).map(([province, provinceZones]) => (
-                    <tbody key={province}>
+                    <React.Fragment key={province}>
                       <TableRow className="bg-gray-50">
                         <TableCell colSpan={5} className="font-semibold text-gray-700">
                           {province}
@@ -453,7 +454,7 @@ export default function ZonesPage() {
                           </TableCell>
                         </TableRow>
                       ))}
-                    </tbody>
+                    </React.Fragment>
                   ))}
                 </>
               )}

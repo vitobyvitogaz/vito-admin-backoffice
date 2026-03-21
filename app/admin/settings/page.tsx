@@ -300,13 +300,13 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header et Navigation communs */}
-      <Header title="Vito Admin" subtitle="Paramètres" />
+      <Header title="Vito Admin" subtitle="" />
       <Navigation />
 
       <main className="p-6 space-y-6">
         <div className="flex items-center gap-3">
           <Settings className="w-8 h-8 text-blue-600" />
-          <div>
+          <div>PARAMÈTRES 
             <h2 className="text-2xl font-bold">Contenu de la page d'accueil</h2>
             <p className="text-sm text-gray-500">
               Gérer les bannières, les textes et les statistiques
