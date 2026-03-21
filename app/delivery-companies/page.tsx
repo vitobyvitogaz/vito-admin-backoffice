@@ -400,7 +400,7 @@ export default function DeliveryCompaniesPage() {
         </div>
 
         {/* Form — ADMIN/SUPER_ADMIN uniquement */}
-        {showForm && canDelete && (
+        {showForm && (canDelete || (canWrite && !!editingId)) && (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>{editingId ? "Modifier la Société" : "Nouvelle Société"}</CardTitle>

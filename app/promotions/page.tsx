@@ -402,7 +402,7 @@ export default function PromotionsPage() {
         </div>
 
         {/* Form — ADMIN/SUPER_ADMIN uniquement */}
-        {showForm && canDelete && (
+        {showForm && (canDelete || (canWrite && !!editingId)) && (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>{editingId ? "Modifier la Promotion" : "Nouvelle Promotion"}</CardTitle>
