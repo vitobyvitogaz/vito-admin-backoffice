@@ -229,8 +229,10 @@ export default function AuditPage() {
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
+                // Après
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  const pageNum = Math.max(1, Math.min(page - 2 + i, totalPages - 4 + i));
+                  const startPage = Math.max(1, Math.min(page - 2, totalPages - Math.min(5, totalPages) + 1));
+                  const pageNum = startPage + i;
                   return (
                     <button
                       key={pageNum}
