@@ -396,7 +396,7 @@ export default function ResellersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header title="VIto Admin" subtitle="Gestion des Revendeurs" />
+      <Header title="Vito Admin" subtitle="GESTION DES REVENDEURS" />
       <Navigation />
 
       <main className="p-6">

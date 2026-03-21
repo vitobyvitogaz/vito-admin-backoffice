@@ -21,10 +21,16 @@ import {
   Search,
   CheckCircle,
   XCircle,
+  Download,
 } from "lucide-react";
-import Link from "next/link";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { toast } from "@/lib/use-toast";
+import { exportToCSV } from "@/lib/export-csv";
+import { Header } from "@/components/Header";
+import { Navigation } from "@/components/Navigation";
+import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+
+const VITOGAZ_GREEN = "#008B7F";
 
 interface Zone {
   id: string;
@@ -36,6 +42,9 @@ interface Zone {
 }
 
 export default function ZonesPage() {
+  // ── Permissions RBAC ─────────────────────────────────────────────────────
+  const { canWrite, canDelete } = useCurrentUser();
+
   const [zones, setZones] = useState<Zone[]>([]);
   const [filteredZones, setFilteredZones] = useState<Zone[]>([]);
   const [loading, setLoading] = useState(true);
@@ -127,6 +136,7 @@ export default function ZonesPage() {
   };
 
   const handleEdit = (zone: Zone) => {
+    if (!canWrite) return;
     setFormData({
       name: zone.name,
       province: zone.province,
@@ -138,6 +148,7 @@ export default function ZonesPage() {
   };
 
   const handleDelete = async (id: string) => {
+    if (!canDelete) return;
     if (!confirm("Êtes-vous sûr de vouloir supprimer cette zone ?")) return;
 
     try {
@@ -158,6 +169,7 @@ export default function ZonesPage() {
   };
 
   const toggleActive = async (zone: Zone) => {
+    if (!canWrite) return;
     try {
       await apiPatch(`/zones/${zone.id}`, {
         is_active: !zone.is_active,
@@ -188,6 +200,15 @@ export default function ZonesPage() {
     setShowForm(false);
   };
 
+  const handleExportCSV = () => {
+    exportToCSV(filteredZones, "zones", {
+      name: "Nom",
+      province: "Province",
+      code: "Code",
+      is_active: "Active",
+    });
+  };
+
   const groupedZones = filteredZones.reduce((acc, zone) => {
     if (!acc[zone.province]) {
       acc[zone.province] = [];
@@ -198,69 +219,14 @@ export default function ZonesPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">VIto Admin</h1>
-              <p className="text-sm text-gray-500 mt-1">
-                Gestion des Zones / Villes
-              </p>
-            </div>
-            <Link href="/">
-              <Button variant="outline">← Retour Dashboard</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <nav className="bg-white border-b border-gray-200">
-        <div className="px-6">
-          <div className="flex gap-6">
-            <Link
-              href="/"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
-              Dashboard
-            </Link>
-            <Link
-              href="/resellers"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
-              Revendeurs
-            </Link>
-            <Link
-              href="/delivery-companies"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
-              Livraisons
-            </Link>
-            <Link
-              href="/documents"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
-              Documents
-            </Link>
-            <Link
-              href="/promotions"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
-              Promotions
-            </Link>
-            <Link
-              href="/zones"
-              className="px-3 py-4 text-sm font-medium text-blue-600 border-b-2 border-blue-600"
-            >
-              Zones
-            </Link>
-          </div>
-        </div>
-      </nav>
+      {/* Header et Navigation communs */}
+      <Header title="Vito Admin" subtitle="Gestion des Zones" />
+      <Navigation />
 
       <main className="p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <MapPin className="w-8 h-8 text-blue-600" />
+            <MapPin className="w-8 h-8" style={{ color: VITOGAZ_GREEN }} />
             <div>
               <h2 className="text-2xl font-bold">Zones / Villes</h2>
               <p className="text-sm text-gray-500">
@@ -269,13 +235,33 @@ export default function ZonesPage() {
               </p>
             </div>
           </div>
-          <Button onClick={() => setShowForm(!showForm)} className="gap-2">
-            <Plus className="w-4 h-4" />
-            {showForm ? "Annuler" : "Nouvelle Zone"}
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Export CSV — toujours visible */}
+            <Button
+              variant="outline"
+              onClick={handleExportCSV}
+              disabled={filteredZones.length === 0}
+              className="gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Exporter CSV
+            </Button>
+            {/* Bouton Nouvelle Zone — ADMIN/SUPER_ADMIN uniquement */}
+            {canDelete && (
+              <Button
+                onClick={() => setShowForm(!showForm)}
+                className="gap-2 text-white"
+                style={{ backgroundColor: VITOGAZ_GREEN }}
+              >
+                <Plus className="w-4 h-4" />
+                {showForm ? "Annuler" : "Nouvelle Zone"}
+              </Button>
+            )}
+          </div>
         </div>
 
-        {showForm && (
+        {/* Form — ADMIN/SUPER_ADMIN uniquement */}
+        {showForm && canDelete && (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>
@@ -336,14 +322,18 @@ export default function ZonesPage() {
                             is_active: e.target.checked,
                           })
                         }
-                        className="w-4 h-4 text-blue-600"
+                        className="w-4 h-4"
                       />
                       <span className="text-sm font-medium">Zone active</span>
                     </label>
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <Button type="submit">
+                  <Button
+                    type="submit"
+                    className="text-white"
+                    style={{ backgroundColor: VITOGAZ_GREEN }}
+                  >
                     {editingId ? "Mettre à jour" : "Créer"}
                   </Button>
                   <Button type="button" variant="outline" onClick={resetForm}>
@@ -406,7 +396,7 @@ export default function ZonesPage() {
                         <TableRow key={zone.id}>
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-2">
-                              <MapPin className="w-4 h-4 text-blue-500" />
+                              <MapPin className="w-4 h-4 text-gray-400" />
                               {zone.name}
                             </div>
                           </TableCell>
@@ -418,10 +408,11 @@ export default function ZonesPage() {
                               {zone.code}
                             </code>
                           </TableCell>
+                          {/* Toggle statut */}
                           <TableCell>
                             <button
-                              onClick={() => toggleActive(zone)}
-                              className="flex items-center gap-1"
+                              onClick={() => canWrite ? toggleActive(zone) : undefined}
+                              className={`flex items-center gap-1 ${!canWrite ? "cursor-default" : ""}`}
                             >
                               {zone.is_active ? (
                                 <span className="flex items-center gap-1 text-green-600 text-sm">
@@ -438,20 +429,26 @@ export default function ZonesPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleEdit(zone)}
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => handleDelete(zone.id)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                              {/* Modifier — EDITOR et ADMIN+ */}
+                              {canWrite && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleEdit(zone)}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                              )}
+                              {/* Supprimer — ADMIN/SUPER_ADMIN uniquement */}
+                              {canDelete && (
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => handleDelete(zone.id)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -462,6 +459,12 @@ export default function ZonesPage() {
               )}
             </TableBody>
           </Table>
+
+          {/* Pied de tableau */}
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 min-h-[52px]">
+            <p className="text-xs text-gray-400 italic" />
+            <p className="text-sm text-gray-500">{filteredZones.length} zone(s)</p>
+          </div>
         </Card>
       </main>
     </div>

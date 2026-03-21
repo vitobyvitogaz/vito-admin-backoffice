@@ -205,7 +205,7 @@ export default function UsersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header title="Vito Admin" subtitle="Gestion des Utilisateurs" />
+      <Header title="Vito Admin" subtitle="GESTION DES UTILISATEURS" />
       <Navigation />
 
       <main className="p-6">

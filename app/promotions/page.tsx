@@ -376,7 +376,7 @@ export default function PromotionsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header title="VIto Admin" subtitle="Gestion des Promotions" />
+      <Header title="VIto Admin" subtitle="GESTION DES PROMOTIONS" />
       <Navigation />
 
       <main className="p-6">

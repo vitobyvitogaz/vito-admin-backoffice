@@ -376,7 +376,7 @@ export default function ProductsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header title="VIto Admin" subtitle="Gestion des Produits" />
+      <Header title="VIto Admin" subtitle="GESTION DES PRODUITS" />
       <Navigation />
 
       {/* Main Content */}

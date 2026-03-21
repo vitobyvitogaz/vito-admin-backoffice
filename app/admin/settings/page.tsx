@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Settings, Image as ImageIcon, X, Upload, Save, Monitor, Smartphone } from "lucide-react";
-import Link from "next/link";
 import { toast } from "@/lib/use-toast";
 import Image from "next/image";
+import { Header } from "@/components/Header";
+import { Navigation } from "@/components/Navigation";
 
 const API_URL = 'https://vito-backend-supabase.onrender.com/api/v1';
 
@@ -20,6 +21,14 @@ interface AppSetting {
   setting_type: string;
   description: string | null;
   is_active: boolean;
+}
+
+// Helper pour inclure le token JWT dans les requêtes authentifiées
+function getAuthHeaders(): Record<string, string> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('vito_auth_token') : null;
+  return token
+    ? { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+    : { 'Content-Type': 'application/json' };
 }
 
 export default function SettingsPage() {
@@ -146,6 +155,7 @@ export default function SettingsPage() {
         setUploadingMobile(true);
       }
 
+      const token = typeof window !== 'undefined' ? localStorage.getItem('vito_auth_token') : null;
       const formData = new FormData();
       formData.append('file', file);
 
@@ -155,6 +165,7 @@ export default function SettingsPage() {
 
       const response = await fetch(endpoint, {
         method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
         body: formData,
       });
 
@@ -199,7 +210,6 @@ export default function SettingsPage() {
     try {
       setSaving(true);
 
-      // Mettre à jour tous les textes (même si vides)
       const updates = [
         { key: 'hero_title', value: heroTitle },
         { key: 'hero_subtitle', value: heroSubtitle },
@@ -209,9 +219,7 @@ export default function SettingsPage() {
       for (const update of updates) {
         const response = await fetch(`${API_URL}/settings/key/${update.key}`, {
           method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ setting_value: update.value }),
         });
 
@@ -253,9 +261,7 @@ export default function SettingsPage() {
       for (const update of updates) {
         const response = await fetch(`${API_URL}/settings/key/${update.key}`, {
           method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: getAuthHeaders(),
           body: JSON.stringify({ setting_value: update.value }),
         });
 
@@ -293,64 +299,9 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Vito Admin</h1>
-              <p className="text-sm text-gray-500 mt-1">
-                Paramètres de l'application
-              </p>
-            </div>
-            <Link href="/">
-              <Button variant="outline">← Retour Dashboard</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <nav className="bg-white border-b border-gray-200">
-        <div className="px-6">
-          <div className="flex gap-6">
-            <Link
-              href="/"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
-              Dashboard
-            </Link>
-            <Link
-              href="/resellers"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
-              Revendeurs
-            </Link>
-            <Link
-              href="/delivery-companies"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
-              Livraisons
-            </Link>
-            <Link
-              href="/documents"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
-              Documents
-            </Link>
-            <Link
-              href="/promotions"
-              className="px-3 py-4 text-sm font-medium text-gray-600 hover:text-gray-900 border-b-2 border-transparent hover:border-gray-300"
-            >
-              Promotions
-            </Link>
-            <Link
-              href="/admin/settings"
-              className="px-3 py-4 text-sm font-medium text-blue-600 border-b-2 border-blue-600"
-            >
-              Paramètres
-            </Link>
-          </div>
-        </div>
-      </nav>
+      {/* Header et Navigation communs */}
+      <Header title="Vito Admin" subtitle="Paramètres" />
+      <Navigation />
 
       <main className="p-6 space-y-6">
         <div className="flex items-center gap-3">

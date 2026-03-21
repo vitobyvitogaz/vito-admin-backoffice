@@ -32,6 +32,7 @@ import {
   ArrowDown,
 } from "lucide-react";
 import { toast } from "@/lib/use-toast";
+import { apiPatch, apiPost, apiDelete } from "@/lib/api";
 import { ZoneSelector } from "@/components/ZoneSelector";
 import { exportToCSV } from "@/lib/export-csv";
 import { Header } from "@/components/Header";
@@ -245,16 +246,12 @@ export default function DeliveryCompaniesPage() {
     }
   };
 
+  // ── CORRIGÉ : utilise apiPatch avec token JWT ─────────────────────────────
   const handleToggleActive = async (company: DeliveryCompany) => {
     if (!canWrite) return;
     setTogglingId(company.id);
     try {
-      const response = await fetch(`${API_URL}/delivery-companies/${company.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_active: !company.is_active }),
-      });
-      if (!response.ok) throw new Error('Erreur toggle');
+      await apiPatch(`/delivery-companies/${company.id}`, { is_active: !company.is_active });
       setCompanies((prev) =>
         prev.map((c) => c.id === company.id ? { ...c, is_active: !c.is_active } : c)
       );
@@ -277,6 +274,7 @@ export default function DeliveryCompaniesPage() {
     });
   };
 
+  // ── CORRIGÉ : utilise apiPatch/apiPost avec token JWT ────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.service_areas.length === 0) {
@@ -294,13 +292,11 @@ export default function DeliveryCompaniesPage() {
       is_active: formData.is_active, display_order: Number(formData.display_order) || 0,
     };
     try {
-      const url = editingId ? `${API_URL}/delivery-companies/${editingId}` : `${API_URL}/delivery-companies`;
-      const response = await fetch(url, {
-        method: editingId ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) throw new Error('Erreur lors de la sauvegarde');
+      if (editingId) {
+        await apiPatch(`/delivery-companies/${editingId}`, payload);
+      } else {
+        await apiPost('/delivery-companies', payload);
+      }
       toast({ title: "Succès !", description: editingId ? "Société modifiée avec succès" : "Société créée avec succès" });
       await fetchCompanies();
       resetForm();
@@ -325,11 +321,11 @@ export default function DeliveryCompaniesPage() {
     setShowForm(true);
   };
 
+  // ── CORRIGÉ : utilise apiDelete avec token JWT ───────────────────────────
   const handleDelete = async (id: string) => {
     if (!confirm("Êtes-vous sûr de vouloir supprimer cette société ?")) return;
     try {
-      const response = await fetch(`${API_URL}/delivery-companies/${id}`, { method: 'DELETE' });
-      if (!response.ok) throw new Error('Erreur lors de la suppression');
+      await apiDelete(`/delivery-companies/${id}`);
       toast({ title: "Succès !", description: "Société supprimée" });
       await fetchCompanies();
     } catch (error) {
@@ -375,7 +371,7 @@ export default function DeliveryCompaniesPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header title="VIto Admin" subtitle="Gestion des Sociétés de Livraison" />
+      <Header title="Vito Admin" subtitle="GESTION DES SOCIÉTÉS DE LIVRAISON" />
       <Navigation />
 
       <main className="p-6">

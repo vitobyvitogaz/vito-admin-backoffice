@@ -315,7 +315,7 @@ export default function DocumentsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header title="VIto Admin" subtitle="Gestion des Documents" />
+      <Header title="Vito Admin" subtitle="GESTION DES DOCUMENTS" />
       <Navigation />
 
       <main className="p-6">
