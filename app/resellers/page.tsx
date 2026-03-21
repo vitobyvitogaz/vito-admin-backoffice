@@ -436,7 +436,7 @@ export default function ResellersPage() {
         </div>
 
         {/* Form — ADMIN/SUPER_ADMIN uniquement */}
-        {showForm && canDelete && (
+        {showForm && (canDelete || (canWrite && !!editingId)) && (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>{editingId ? "Modifier le Revendeur" : "Nouveau Revendeur"}</CardTitle>

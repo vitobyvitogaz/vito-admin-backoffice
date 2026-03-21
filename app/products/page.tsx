@@ -417,7 +417,7 @@ export default function ProductsPage() {
         </div>
 
         {/* Form — ADMIN/SUPER_ADMIN uniquement */}
-        {showForm && canDelete && (
+        {showForm && (canDelete || (canWrite && !!editingId)) && (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>
