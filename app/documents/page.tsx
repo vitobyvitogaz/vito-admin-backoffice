@@ -227,11 +227,10 @@ export default function DocumentsPage() {
       description: formData.description || null,
       category: formData.category,
       file_url: isVideoCategory ? "" : formData.file_url,
-      video_url: isVideoCategory ? formData.video_url : null,
+      ...(isVideoCategory ? { video_url: formData.video_url } : {}),
       is_offline: formData.is_offline,
       is_active: true,
     };
-
     try {
       if (editingId) {
         await apiPatch(`/documents/${editingId}`, payload);
