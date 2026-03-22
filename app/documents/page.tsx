@@ -35,7 +35,7 @@ import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 
 const VITOGAZ_GREEN = "#008B7F";
 
-type SortKey = "title" | "category" | "download_count" | "is_offline";
+type SortKey = "title" | "category" | "download_count" | "is_offline" | "page_count";
 
 interface Document {
   id: string;
@@ -45,6 +45,8 @@ interface Document {
   file_url: string;
   video_url?: string | null;
   download_count: number;
+  view_count?: number | null;
+  page_count: number | null;
   is_offline: boolean;
   is_active: boolean;
 }
@@ -72,6 +74,7 @@ export default function DocumentsPage() {
     category: "pamf",
     file_url: "",
     video_url: "",
+    page_count: "",
     is_offline: false,
   });
 
@@ -124,6 +127,11 @@ export default function DocumentsPage() {
           ? (a.download_count || 0) - (b.download_count || 0)
           : (b.download_count || 0) - (a.download_count || 0);
       }
+      if (col === "page_count") {
+        return dir === "asc"
+          ? (a.page_count || 0) - (b.page_count || 0)
+          : (b.page_count || 0) - (a.page_count || 0);
+      }
       if (col === "is_offline") {
         const valA = a.is_offline ? 1 : 0;
         const valB = b.is_offline ? 1 : 0;
@@ -156,7 +164,8 @@ export default function DocumentsPage() {
     if (!sortColumn || !sortDirection) return null;
     if (sortColumn === "is_offline") return `Trié par Offline (${sortDirection === "desc" ? "Offline en premier" : "Online en premier"})`;
     if (sortColumn === "download_count") return `Trié par Téléchargements (${sortDirection === "desc" ? "Plus téléchargés" : "Moins téléchargés"})`;
-    const labels: Record<SortKey, string> = { title: "Titre", category: "Catégorie", download_count: "Téléchargements", is_offline: "Offline" };
+    if (sortColumn === "page_count") return `Trié par Pages (${sortDirection === "desc" ? "Plus de pages" : "Moins de pages"})`;
+    const labels: Record<SortKey, string> = { title: "Titre", category: "Catégorie", download_count: "Téléchargements", is_offline: "Offline", page_count: "Pages" };
     return `Trié par ${labels[sortColumn]} (${sortDirection === "asc" ? "A → Z" : "Z → A"})`;
   };
 
@@ -226,10 +235,9 @@ export default function DocumentsPage() {
       title: formData.title,
       description: formData.description || null,
       category: formData.category,
-      //file_url: isVideoCategory ? "" : formData.file_url,
-      //file_url: isVideoCategory ? null : (formData.file_url || null),
       file_url: isVideoCategory ? "" : (formData.file_url || ""),
       ...(isVideoCategory ? { video_url: formData.video_url } : {}),
+      ...(!isVideoCategory && formData.page_count ? { page_count: parseInt(formData.page_count) } : {}),
       is_offline: formData.is_offline,
       is_active: true,
     };
@@ -256,6 +264,7 @@ export default function DocumentsPage() {
       category: doc.category,
       file_url: doc.file_url,
       video_url: doc.video_url || "",
+      page_count: doc.page_count ? doc.page_count.toString() : "",
       is_offline: doc.is_offline,
     });
     setEditingId(doc.id);
@@ -275,7 +284,7 @@ export default function DocumentsPage() {
   };
 
   const resetForm = () => {
-    setFormData({ title: "", description: "", category: "pamf", file_url: "", video_url: "", is_offline: false });
+    setFormData({ title: "", description: "", category: "pamf", file_url: "", video_url: "", page_count: "", is_offline: false });
     setSelectedFile(null);
     setEditingId(null);
     setShowForm(false);
@@ -310,7 +319,8 @@ export default function DocumentsPage() {
   const sortableCols: { key: SortKey; label: string }[] = [
     { key: "title", label: "Titre" },
     { key: "category", label: "Catégorie" },
-    { key: "download_count", label: "Téléchargements" },
+    { key: "page_count", label: "Pages" },
+    { key: "download_count", label: "Téléch. / Vues" },
     { key: "is_offline", label: "Offline" },
   ];
 
@@ -338,7 +348,7 @@ export default function DocumentsPage() {
           )}
         </div>
 
-        {/* Form — ADMIN/SUPER_ADMIN uniquement */}
+        {/* Form — EDITOR et ADMIN+ pour modification, ADMIN+ pour création */}
         {showForm && (canDelete || (canWrite && !!editingId)) && (
           <Card className="mb-6">
             <CardHeader>
@@ -357,7 +367,7 @@ export default function DocumentsPage() {
                       id="category"
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       value={formData.category}
-                      onChange={(e) => setFormData({ ...formData, category: e.target.value, file_url: "", video_url: "" })}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value, file_url: "", video_url: "", page_count: "" })}
                     >
                       <option value="pamf">PAMF</option>
                       <option value="security">Sécurité</option>
@@ -409,9 +419,24 @@ export default function DocumentsPage() {
                     )}
                   </div>
 
+                  {/* Nombre de pages — PDF uniquement */}
+                  {!isVideoCategory && (
+                    <div>
+                      <Label htmlFor="page_count">Nombre de pages</Label>
+                      <Input
+                        id="page_count"
+                        type="number"
+                        min="1"
+                        value={formData.page_count}
+                        onChange={(e) => setFormData({ ...formData, page_count: e.target.value })}
+                        placeholder="Ex: 12"
+                      />
+                    </div>
+                  )}
+
                   {/* Offline — masqué pour les vidéos */}
                   {!isVideoCategory && (
-                    <div className="md:col-span-2">
+                    <div className="flex items-end">
                       <label className="flex items-center gap-2">
                         <input type="checkbox" checked={formData.is_offline} onChange={(e) => setFormData({ ...formData, is_offline: e.target.checked })} className="w-4 h-4" />
                         <span className="text-sm font-medium">Disponible hors-ligne</span>
@@ -451,7 +476,7 @@ export default function DocumentsPage() {
                     <TableHead
                       key={col.key}
                       onClick={() => handleSort(col.key)}
-                      className="cursor-pointer select-none transition-colors hover:bg-gray-50"
+                      className={`cursor-pointer select-none transition-colors hover:bg-gray-50 ${col.key === "download_count" ? "text-right" : ""}`}
                       style={isColActive ? { backgroundColor: "#f0faf9", color: VITOGAZ_GREEN } : {}}
                     >
                       <span className="flex items-center gap-1">
@@ -467,9 +492,9 @@ export default function DocumentsPage() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8">Chargement...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center py-8">Chargement...</TableCell></TableRow>
               ) : sortedDocuments.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8">Aucun document trouvé</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center py-8">Aucun document trouvé</TableCell></TableRow>
               ) : (
                 sortedDocuments.map((doc) => (
                   <TableRow key={doc.id} className={!doc.is_active ? "opacity-50" : ""}>
@@ -482,10 +507,20 @@ export default function DocumentsPage() {
                         {getCategoryLabel(doc.category)}
                       </span>
                     </TableCell>
-                    {/* Téléchargements */}
+                    {/* Pages */}
                     <TableCell className="text-sm text-gray-700">
                       {doc.category === "video" ? (
                         <span className="text-gray-400 text-xs">—</span>
+                      ) : doc.page_count ? (
+                        <span>{doc.page_count} p.</span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">—</span>
+                      )}
+                    </TableCell>
+                    {/* Téléchargements / Vues */}
+                    <TableCell className="text-sm text-gray-700 text-right">
+                      {doc.category === "video" ? (
+                        <span>{doc.view_count || 0} vues</span>
                       ) : (
                         <span>{doc.download_count || 0}</span>
                       )}
