@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { ScrollText, Search, Shield, ChevronLeft, ChevronRight } from "lucide-react";
+import { ScrollText, Search, Shield, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from "lucide-react";
 import { format } from "date-fns";
 import { Header } from "@/components/Header";
 import { Navigation } from "@/components/Navigation";
@@ -28,6 +28,9 @@ interface AuditLog {
   user_email: string | null;
   user_role: string | null;
   ip_address: string | null;
+  old_data: Record<string, any> | null;
+  new_data: Record<string, any> | null;
+  changes: Record<string, any> | null;
   created_at: string;
 }
 
@@ -57,6 +60,120 @@ const ACTION_LABELS: Record<string, string> = {
   READ: "Lecture",
 };
 
+// Champs à exclure de l'affichage (trop verbeux ou inutiles)
+const EXCLUDED_KEYS = ['id', 'created_at', 'updated_at', 'deleted_at', 'created_by_id', 'updated_by_id'];
+
+// Formatage d'une valeur pour affichage lisible
+function formatValue(value: any): string {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'boolean') return value ? 'Oui' : 'Non';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+// Panneau de détails d'un log
+function LogDetails({ log }: { log: AuditLog }) {
+  if (log.action === 'CREATE' && log.new_data) {
+    const entries = Object.entries(log.new_data).filter(([k]) => !EXCLUDED_KEYS.includes(k));
+    if (entries.length === 0) return null;
+    return (
+      <div className="space-y-1">
+        <p className="text-xs font-semibold text-emerald-700 mb-2">Données créées :</p>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+          {entries.map(([key, value]) => (
+            <div key={key} className="flex gap-2 text-xs">
+              <span className="text-gray-500 font-medium min-w-[100px]">{key}</span>
+              <span className="text-gray-800 truncate max-w-[200px]">{formatValue(value)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (log.action === 'UPDATE') {
+    // Si old_data disponible, afficher les champs qui ont changé
+    if (log.old_data && log.new_data) {
+      const changedKeys = Object.keys(log.new_data).filter(
+        (k) => !EXCLUDED_KEYS.includes(k) && JSON.stringify(log.old_data![k]) !== JSON.stringify(log.new_data![k])
+      );
+      if (changedKeys.length === 0) {
+        // Afficher new_data si aucun changement détecté
+        const entries = Object.entries(log.new_data).filter(([k]) => !EXCLUDED_KEYS.includes(k));
+        if (entries.length === 0) return null;
+        return (
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-blue-700 mb-2">Données modifiées :</p>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+              {entries.map(([key, value]) => (
+                <div key={key} className="flex gap-2 text-xs">
+                  <span className="text-gray-500 font-medium min-w-[100px]">{key}</span>
+                  <span className="text-gray-800 truncate max-w-[200px]">{formatValue(value)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+      return (
+        <div className="space-y-1">
+          <p className="text-xs font-semibold text-blue-700 mb-2">Champs modifiés :</p>
+          <div className="space-y-2">
+            {changedKeys.map((key) => (
+              <div key={key} className="flex items-center gap-2 text-xs">
+                <span className="text-gray-500 font-medium min-w-[100px]">{key}</span>
+                <span className="text-red-500 line-through truncate max-w-[160px]">{formatValue(log.old_data![key])}</span>
+                <span className="text-gray-400">→</span>
+                <span className="text-emerald-700 font-medium truncate max-w-[160px]">{formatValue(log.new_data![key])}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    // Seulement new_data disponible
+    if (log.new_data) {
+      const entries = Object.entries(log.new_data).filter(([k]) => !EXCLUDED_KEYS.includes(k));
+      if (entries.length === 0) return null;
+      return (
+        <div className="space-y-1">
+          <p className="text-xs font-semibold text-blue-700 mb-2">Données modifiées :</p>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+            {entries.map(([key, value]) => (
+              <div key={key} className="flex gap-2 text-xs">
+                <span className="text-gray-500 font-medium min-w-[100px]">{key}</span>
+                <span className="text-gray-800 truncate max-w-[200px]">{formatValue(value)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+  }
+
+  if (log.action === 'DELETE') {
+    return (
+      <div className="text-xs text-red-600">
+        <p className="font-semibold mb-1">Ressource supprimée :</p>
+        <p>ID : <span className="font-mono">{log.resource_id || '—'}</span></p>
+        {log.resource_name && <p>Nom : <span className="font-medium">{log.resource_name}</span></p>}
+        {log.old_data && (
+          <div className="mt-2 space-y-1">
+            {Object.entries(log.old_data).filter(([k]) => !EXCLUDED_KEYS.includes(k)).map(([key, value]) => (
+              <div key={key} className="flex gap-2">
+                <span className="text-gray-500 font-medium min-w-[100px]">{key}</span>
+                <span className="text-gray-800 truncate max-w-[200px]">{formatValue(value)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return null;
+}
+
 export default function AuditPage() {
   const router = useRouter();
   const { canViewAudit, role } = useCurrentUser();
@@ -68,6 +185,7 @@ export default function AuditPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [actionFilter, setActionFilter] = useState("ALL");
   const [page, setPage] = useState(1);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push("/login"); return; }
@@ -101,7 +219,6 @@ export default function AuditPage() {
     if (canViewAudit) fetchLogs(page);
   }, [canViewAudit, fetchLogs, page]);
 
-  // Filtre local sur les résultats de la page courante
   const filteredLogs = logs.filter((l) => {
     const matchAction = actionFilter === "ALL" || l.action === actionFilter;
     const matchSearch = !searchQuery.trim() || [l.user_email, l.resource_type, l.resource_name, l.action]
@@ -113,7 +230,17 @@ export default function AuditPage() {
     setPage(newPage);
     setSearchQuery("");
     setActionFilter("ALL");
+    setExpandedId(null);
   };
+
+  const toggleExpand = (id: string) => {
+    setExpandedId(prev => prev === id ? null : id);
+  };
+
+  const hasDetails = (log: AuditLog) =>
+    (log.new_data && Object.keys(log.new_data).length > 0) ||
+    (log.old_data && Object.keys(log.old_data).length > 0) ||
+    log.action === 'DELETE';
 
   if (role !== null && !canViewAudit) return null;
 
@@ -172,6 +299,7 @@ export default function AuditPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-6"></TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Action</TableHead>
                 <TableHead>Ressource</TableHead>
@@ -182,34 +310,57 @@ export default function AuditPage() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8">Chargement...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center py-8">Chargement...</TableCell></TableRow>
               ) : filteredLogs.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-gray-400">Aucune entrée trouvée</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-gray-400">Aucune entrée trouvée</TableCell></TableRow>
               ) : (
                 filteredLogs.map((log) => (
-                  <TableRow key={log.id} className="hover:bg-gray-50">
-                    <TableCell className="text-xs text-gray-500 whitespace-nowrap">
-                      {format(new Date(log.created_at), "dd/MM/yyyy HH:mm:ss")}
-                    </TableCell>
-                    <TableCell>
-                      <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${ACTION_COLORS[log.action] || "bg-gray-100 text-gray-600"}`}>
-                        {ACTION_LABELS[log.action] || log.action}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium text-gray-800">{log.resource_type || "—"}</span>
-                        {log.resource_name && <span className="text-xs text-gray-400">{log.resource_name}</span>}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-gray-700">{log.user_email || "—"}</TableCell>
-                    <TableCell>
-                      {log.user_role
-                        ? <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">{log.user_role}</span>
-                        : "—"}
-                    </TableCell>
-                    <TableCell className="text-xs font-mono text-gray-400">{log.ip_address || "—"}</TableCell>
-                  </TableRow>
+                  <>
+                    <TableRow
+                      key={log.id}
+                      className={`hover:bg-gray-50 ${hasDetails(log) ? "cursor-pointer" : ""} ${expandedId === log.id ? "bg-gray-50" : ""}`}
+                      onClick={() => hasDetails(log) && toggleExpand(log.id)}
+                    >
+                      {/* Chevron dépliable */}
+                      <TableCell className="w-6 pr-0">
+                        {hasDetails(log) ? (
+                          expandedId === log.id
+                            ? <ChevronUp className="w-4 h-4 text-gray-400" />
+                            : <ChevronDown className="w-4 h-4 text-gray-400" />
+                        ) : <span />}
+                      </TableCell>
+                      <TableCell className="text-xs text-gray-500 whitespace-nowrap">
+                        {format(new Date(log.created_at), "dd/MM/yyyy HH:mm:ss")}
+                      </TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${ACTION_COLORS[log.action] || "bg-gray-100 text-gray-600"}`}>
+                          {ACTION_LABELS[log.action] || log.action}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium text-gray-800">{log.resource_type || "—"}</span>
+                          {log.resource_name && <span className="text-xs text-gray-400">{log.resource_name}</span>}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-700">{log.user_email || "—"}</TableCell>
+                      <TableCell>
+                        {log.user_role
+                          ? <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">{log.user_role}</span>
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-xs font-mono text-gray-400">{log.ip_address || "—"}</TableCell>
+                    </TableRow>
+
+                    {/* Panneau dépliable avec les détails */}
+                    {expandedId === log.id && hasDetails(log) && (
+                      <TableRow key={`${log.id}-details`} className="bg-gray-50 border-b border-gray-100">
+                        <TableCell colSpan={7} className="py-4 px-8">
+                          <LogDetails log={log} />
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
                 ))
               )}
             </TableBody>
