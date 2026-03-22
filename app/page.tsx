@@ -77,7 +77,13 @@ function computeTrend(data: EvolutionPoint[]): { value: number; positive: boolea
   const pct = Math.round(((second - first) / first) * 100);
   return { value: Math.abs(pct), positive: pct >= 0 };
 }
-
+function toCumulative(data: EvolutionPoint[]): EvolutionPoint[] {
+  let running = 0;
+  return data.map(({ date, count }) => {
+    running += count;
+    return { date, count: running };
+  });
+}
 function StatCardSkeleton() {
   return (
     <Card className="border border-gray-100">
@@ -121,7 +127,10 @@ function EvolutionCard({ title, entity, color, period, onPeriodChange, data, loa
   title: string; entity: EntityKey; color: string; period: PeriodKey;
   onPeriodChange: (v: PeriodKey) => void; data: EvolutionPoint[]; loading: boolean;
 }) {
-  const displayData = parseInt(period) >= 90 ? aggregateByWeek(data) : data;
+  //const displayData = parseInt(period) >= 90 ? aggregateByWeek(data) : data;
+  // Après
+  const rawData = parseInt(period) >= 90 ? aggregateByWeek(data) : data;
+  const displayData = toCumulative(rawData);
   const trend = computeTrend(data);
   const total = data.reduce((s, d) => s + d.count, 0);
   return (
