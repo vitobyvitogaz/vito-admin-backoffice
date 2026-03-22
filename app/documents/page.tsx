@@ -44,6 +44,7 @@ interface Document {
   category: string;
   file_url: string;
   video_url?: string | null;
+  file_size?: string | null;
   download_count: number;
   view_count?: number | null;
   page_count: number | null;
@@ -73,6 +74,7 @@ export default function DocumentsPage() {
     description: "",
     category: "pamf",
     file_url: "",
+    file_size: "",
     video_url: "",
     page_count: "",
     is_offline: false,
@@ -206,8 +208,12 @@ export default function DocumentsPage() {
           const errorData = await response.json();
           throw new Error(errorData.message || 'Erreur lors de l\'upload');
         }
-        const { file_url } = await response.json();
-        setFormData(prev => ({ ...prev, file_url }));
+        const { file_url, file_size } = await response.json();
+        // Calculer la taille en MB depuis les bytes retournés par le backend
+        const fileSizeStr = file_size
+          ? `${(file_size / (1024 * 1024)).toFixed(1)} MB`
+          : `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+        setFormData(prev => ({ ...prev, file_url, file_size: fileSizeStr }));
         toast({ title: "Succès !", description: "Fichier uploadé avec succès" });
       } catch (error: any) {
         console.error("Erreur upload:", error);
@@ -237,6 +243,7 @@ export default function DocumentsPage() {
       category: formData.category,
       file_url: isVideoCategory ? "" : (formData.file_url || ""),
       ...(isVideoCategory ? { video_url: formData.video_url } : {}),
+      ...(!isVideoCategory && formData.file_size ? { file_size: formData.file_size } : {}),
       ...(!isVideoCategory && formData.page_count ? { page_count: parseInt(formData.page_count) } : {}),
       is_offline: formData.is_offline,
       is_active: true,
@@ -263,6 +270,7 @@ export default function DocumentsPage() {
       description: doc.description || "",
       category: doc.category,
       file_url: doc.file_url,
+      file_size: doc.file_size || "",
       video_url: doc.video_url || "",
       page_count: doc.page_count ? doc.page_count.toString() : "",
       is_offline: doc.is_offline,
@@ -284,7 +292,7 @@ export default function DocumentsPage() {
   };
 
   const resetForm = () => {
-    setFormData({ title: "", description: "", category: "pamf", file_url: "", video_url: "", page_count: "", is_offline: false });
+    setFormData({ title: "", description: "", category: "pamf", file_url: "", file_size: "", video_url: "", page_count: "", is_offline: false });
     setSelectedFile(null);
     setEditingId(null);
     setShowForm(false);
@@ -367,7 +375,7 @@ export default function DocumentsPage() {
                       id="category"
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       value={formData.category}
-                      onChange={(e) => setFormData({ ...formData, category: e.target.value, file_url: "", video_url: "", page_count: "" })}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value, file_url: "", file_size: "", video_url: "", page_count: "" })}
                     >
                       <option value="pamf">PAMF</option>
                       <option value="security">Sécurité</option>
@@ -486,15 +494,17 @@ export default function DocumentsPage() {
                     </TableHead>
                   );
                 })}
+                {/* Colonne Taille — non triable */}
+                <TableHead className="text-right">Taille</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8">Chargement...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8">Chargement...</TableCell></TableRow>
               ) : sortedDocuments.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8">Aucun document trouvé</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8">Aucun document trouvé</TableCell></TableRow>
               ) : (
                 sortedDocuments.map((doc) => (
                   <TableRow key={doc.id} className={!doc.is_active ? "opacity-50" : ""}>
@@ -533,6 +543,16 @@ export default function DocumentsPage() {
                         <span className="text-emerald-600 text-sm font-medium">✓</span>
                       ) : (
                         <span className="text-gray-400 text-sm">-</span>
+                      )}
+                    </TableCell>
+                    {/* Taille */}
+                    <TableCell className="text-sm text-gray-600 text-right">
+                      {doc.category === "video" ? (
+                        <span className="text-gray-400 text-xs">—</span>
+                      ) : doc.file_size ? (
+                        <span>{doc.file_size}</span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">—</span>
                       )}
                     </TableCell>
                     {/* Description */}
