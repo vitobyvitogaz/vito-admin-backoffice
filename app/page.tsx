@@ -77,13 +77,17 @@ function computeTrend(data: EvolutionPoint[]): { value: number; positive: boolea
   const pct = Math.round(((second - first) / first) * 100);
   return { value: Math.abs(pct), positive: pct >= 0 };
 }
-function toCumulative(data: EvolutionPoint[]): EvolutionPoint[] {
-  let running = 0;
+
+// ── CORRECTION : démarre depuis total actuel - delta période ─────────────
+function toCumulative(data: EvolutionPoint[], currentTotal: number): EvolutionPoint[] {
+  const totalDelta = data.reduce((sum, d) => sum + d.count, 0);
+  let running = currentTotal - totalDelta;
   return data.map(({ date, count }) => {
     running += count;
-    return { date, count: running };
+    return { date, count: Math.max(0, running) };
   });
 }
+
 function StatCardSkeleton() {
   return (
     <Card className="border border-gray-100">
@@ -123,14 +127,15 @@ function PeriodSelector({ value, onChange }: { value: PeriodKey; onChange: (v: P
     </div>
   );
 }
-function EvolutionCard({ title, entity, color, period, onPeriodChange, data, loading }: {
+
+// ── CORRECTION : currentTotal ajouté dans les props ──────────────────────
+function EvolutionCard({ title, entity, color, period, onPeriodChange, data, loading, currentTotal }: {
   title: string; entity: EntityKey; color: string; period: PeriodKey;
   onPeriodChange: (v: PeriodKey) => void; data: EvolutionPoint[]; loading: boolean;
+  currentTotal: number;
 }) {
-  //const displayData = parseInt(period) >= 90 ? aggregateByWeek(data) : data;
-  // Après
   const rawData = parseInt(period) >= 90 ? aggregateByWeek(data) : data;
-  const displayData = toCumulative(rawData);
+  const displayData = toCumulative(rawData, currentTotal);
   const trend = computeTrend(data);
   const total = data.reduce((s, d) => s + d.count, 0);
   return (
@@ -167,7 +172,7 @@ function EvolutionCard({ title, entity, color, period, onPeriodChange, data, loa
               <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} tickLine={false} axisLine={false} allowDecimals={false} />
               <Tooltip contentStyle={{ borderRadius: 8, border: "none", boxShadow: "0 4px 20px rgba(0,0,0,0.1)", fontSize: 12 }}
                 labelFormatter={(v) => new Date(v).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long" })}
-                formatter={(v: number) => [v, "Nouveaux"]} />
+                formatter={(v: number) => [v, "Total"]} />
               <Area type="monotone" dataKey="count" stroke={color} strokeWidth={2} fill={`url(#grad-${entity})`} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
             </AreaChart>
           </ResponsiveContainer>
@@ -262,7 +267,6 @@ export default function DashboardPage() {
     { title: "Scans QR Code", value: summary.qrScans, icon: QrCode, href: "#qr-stats", color: "text-violet-600", bgColor: "bg-violet-50" },
   ];
 
-  // ── Actions rapides — libellés adaptés selon le rôle ─────────────────────
   const quickActions = [
     {
       href: "/resellers",
@@ -336,10 +340,11 @@ export default function DashboardPage() {
         <div>
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Évolutions</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <EvolutionCard title="Revendeurs" entity="resellers" color={CHART_COLORS.resellers} period={periods.resellers} onPeriodChange={(v) => handlePeriodChange("resellers", v)} data={evolutionData.resellers} loading={evolutionLoading.resellers} />
-            <EvolutionCard title="Sociétés de Livraison" entity="delivery-companies" color={CHART_COLORS["delivery-companies"]} period={periods["delivery-companies"]} onPeriodChange={(v) => handlePeriodChange("delivery-companies", v)} data={evolutionData["delivery-companies"]} loading={evolutionLoading["delivery-companies"]} />
-            <EvolutionCard title="Promotions" entity="promotions" color={CHART_COLORS.promotions} period={periods.promotions} onPeriodChange={(v) => handlePeriodChange("promotions", v)} data={evolutionData.promotions} loading={evolutionLoading.promotions} />
-            <EvolutionCard title="Scans QR Code" entity="qr-scans" color={CHART_COLORS["qr-scans"]} period={periods["qr-scans"]} onPeriodChange={(v) => handlePeriodChange("qr-scans", v)} data={evolutionData["qr-scans"]} loading={evolutionLoading["qr-scans"]} />
+            {/* ── CORRECTION : currentTotal passé depuis summary ── */}
+            <EvolutionCard title="Revendeurs" entity="resellers" color={CHART_COLORS.resellers} period={periods.resellers} onPeriodChange={(v) => handlePeriodChange("resellers", v)} data={evolutionData.resellers} loading={evolutionLoading.resellers} currentTotal={summary.resellers} />
+            <EvolutionCard title="Sociétés de Livraison" entity="delivery-companies" color={CHART_COLORS["delivery-companies"]} period={periods["delivery-companies"]} onPeriodChange={(v) => handlePeriodChange("delivery-companies", v)} data={evolutionData["delivery-companies"]} loading={evolutionLoading["delivery-companies"]} currentTotal={summary.deliveryCompanies} />
+            <EvolutionCard title="Promotions" entity="promotions" color={CHART_COLORS.promotions} period={periods.promotions} onPeriodChange={(v) => handlePeriodChange("promotions", v)} data={evolutionData.promotions} loading={evolutionLoading.promotions} currentTotal={summary.promotions} />
+            <EvolutionCard title="Scans QR Code" entity="qr-scans" color={CHART_COLORS["qr-scans"]} period={periods["qr-scans"]} onPeriodChange={(v) => handlePeriodChange("qr-scans", v)} data={evolutionData["qr-scans"]} loading={evolutionLoading["qr-scans"]} currentTotal={summary.qrScans} />
           </div>
         </div>
 
