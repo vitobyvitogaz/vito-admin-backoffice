@@ -185,7 +185,8 @@ function EvolutionCard({ title, entity, color, period, onPeriodChange, data, loa
 export default function DashboardPage() {
   const router = useRouter();
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  const { canWrite, canDelete } = useCurrentUser();
+  //const { canWrite, canDelete } = useCurrentUser();
+  const { canWrite, canDelete, isSuperAdmin } = useCurrentUser();
 
   const [summary, setSummary] = useState<Summary>({
     resellers: 0, deliveryCompanies: 0, promotions: 0,
@@ -531,15 +532,16 @@ export default function DashboardPage() {
                   <span className={`text-sm font-semibold ${row.valueClass}`}>{row.value}</span>
                 </div>
               ))}
+              {isSuperAdmin && (
               <div className="pt-3 border-t">
                 <a href="https://vito-backend-supabase.onrender.com/api" target="_blank" rel="noopener noreferrer" className="text-sm font-medium hover:opacity-80 transition-opacity" style={{ color: VITOGAZ_GREEN }}>
                   → Voir Documentation Swagger
                 </a>
               </div>
+              )}
             </CardContent>
           </Card>
         </div>
-
       </main>
     </div>
   );
