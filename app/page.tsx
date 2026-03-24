@@ -68,13 +68,11 @@ function aggregateByWeek(data: EvolutionPoint[]): EvolutionPoint[] {
   });
   return Object.entries(weeks).map(([date, count]) => ({ date, count }));
 }
-function computeTrend(data: EvolutionPoint[]): { value: number; positive: boolean | null } {
-  if (data.length < 2) return { value: 0, positive: null };
-  const half = Math.floor(data.length / 2);
-  const first = data.slice(0, half).reduce((s, d) => s + d.count, 0);
-  const second = data.slice(half).reduce((s, d) => s + d.count, 0);
-  if (first === 0) return { value: 0, positive: null };
-  const pct = Math.round(((second - first) / first) * 100);
+function computeTrend(data: EvolutionPoint[], currentTotal: number): { value: number; positive: boolean | null } {
+  const totalDelta = data.reduce((s, d) => s + d.count, 0);
+  const totalDepart = currentTotal - totalDelta;
+  if (totalDepart <= 0) return { value: 0, positive: null };
+  const pct = Math.round((totalDelta / totalDepart) * 100);
   return { value: Math.abs(pct), positive: pct >= 0 };
 }
 
@@ -136,7 +134,7 @@ function EvolutionCard({ title, entity, color, period, onPeriodChange, data, loa
 }) {
   const rawData = parseInt(period) >= 90 ? aggregateByWeek(data) : data;
   const displayData = toCumulative(rawData, currentTotal);
-  const trend = computeTrend(data);
+  const trend = computeTrend(data, currentTotal);
   const total = data.reduce((s, d) => s + d.count, 0);
   return (
     <Card className="border border-gray-100 shadow-sm">
