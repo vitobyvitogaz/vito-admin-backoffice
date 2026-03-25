@@ -11,6 +11,7 @@ import {
   FileText,
   Users,
   ScrollText,
+  Bell,
 } from "lucide-react";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 
@@ -28,14 +29,15 @@ const GasBottleIcon = ({ className, strokeWidth }: { className?: string; strokeW
 );
 
 const baseNavItems = [
-  { href: "/", label: "Dashboard", minRole: "VIEWER", icon: LayoutDashboard },
-  { href: "/resellers", label: "Revendeurs", minRole: "VIEWER", icon: Building2 },
-  { href: "/products", label: "Produits", minRole: "VIEWER", icon: GasBottleIcon },
-  { href: "/delivery-companies", label: "Livraisons", minRole: "VIEWER", icon: Truck },
-  { href: "/promotions", label: "Promotions", minRole: "VIEWER", icon: Tag },
-  { href: "/documents", label: "Documents", minRole: "VIEWER", icon: FileText },
-  { href: "/users", label: "Utilisateurs", minRole: "ADMIN", icon: Users },
-  { href: "/audit", label: "Journal", minRole: "SUPER_ADMIN", icon: ScrollText },
+  { href: "/",                   label: "Dashboard",      minRole: "VIEWER",      icon: LayoutDashboard },
+  { href: "/resellers",          label: "Revendeurs",     minRole: "VIEWER",      icon: Building2 },
+  { href: "/products",           label: "Produits",       minRole: "VIEWER",      icon: GasBottleIcon },
+  { href: "/delivery-companies", label: "Livraisons",     minRole: "VIEWER",      icon: Truck },
+  { href: "/promotions",         label: "Promotions",     minRole: "VIEWER",      icon: Tag },
+  { href: "/documents",          label: "Documents",      minRole: "VIEWER",      icon: FileText },
+  { href: "/notifications",      label: "Notifications",  minRole: "ADMIN",       icon: Bell },
+  { href: "/users",              label: "Utilisateurs",   minRole: "ADMIN",       icon: Users },
+  { href: "/audit",              label: "Journal",        minRole: "SUPER_ADMIN", icon: ScrollText },
 ];
 
 const ROLE_HIERARCHY = ["API_CLIENT", "VIEWER", "EDITOR", "ADMIN", "SUPER_ADMIN"];
