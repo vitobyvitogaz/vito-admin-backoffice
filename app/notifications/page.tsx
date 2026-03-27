@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { apiGet, apiPost, apiPatch } from "@/lib/api";
 import { toast } from "@/lib/use-toast";
+import { ZoneSelector } from "@/components/ZoneSelector";
 import { Header } from "@/components/Header";
 import { Navigation } from "@/components/Navigation";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
@@ -22,7 +23,6 @@ const VITOGAZ_GREEN = "#008B7F";
 const HISTORY_KEY = "notif-history";
 const HISTORY_PAGE_SIZE = 5;
 
-// ── Types ────────────────────────────────────────────────────────────────────
 interface NotificationStats {
   total:  number;
   active: number;
@@ -53,7 +53,6 @@ interface HistoryEntry {
   sentAt: string;
 }
 
-// ── Helpers historique ───────────────────────────────────────────────────────
 const loadHistory = (): HistoryEntry[] => {
   try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); }
   catch { return []; }
@@ -63,7 +62,6 @@ const saveHistory = (entry: HistoryEntry) => {
   localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
 };
 
-// ── Config des templates ─────────────────────────────────────────────────────
 const TEMPLATE_CONFIG: Record<string, { icon: React.ReactNode; label: string; vars: string[] }> = {
   PROMOTIONS: {
     icon:  <Tag className="w-4 h-4 text-amber-500" />,
@@ -85,27 +83,25 @@ const TEMPLATE_CONFIG: Record<string, { icon: React.ReactNode; label: string; va
 export default function NotificationsPage() {
   const { canWrite } = useCurrentUser();
 
-  // ── Stats ────────────────────────────────────────────────────────────────
   const [stats, setStats]               = useState<NotificationStats | null>(null);
   const [loadingStats, setLoadingStats] = useState(true);
   const [showAllZones, setShowAllZones] = useState(false);
 
-  // ── Templates ────────────────────────────────────────────────────────────
-  const [templates, setTemplates]           = useState<Template[]>([]);
+  const [templates, setTemplates]               = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [editingTemplate, setEditingTemplate]   = useState<string | null>(null);
   const [editTitle, setEditTitle]               = useState("");
   const [editBody, setEditBody]                 = useState("");
   const [savingTemplate, setSavingTemplate]     = useState(false);
 
-  // ── Broadcast manuel ─────────────────────────────────────────────────────
-  const [broadcastTitle, setBroadcastTitle] = useState("");
-  const [broadcastBody, setBroadcastBody]   = useState("");
-  const [broadcastUrl, setBroadcastUrl]     = useState("/fr");
-  const [sending, setSending]               = useState(false);
-  const [lastResult, setLastResult]         = useState<SendResult | null>(null);
+  // ── Broadcast ────────────────────────────────────────────────────────────
+  const [broadcastTitle, setBroadcastTitle]   = useState("");
+  const [broadcastBody, setBroadcastBody]     = useState("");
+  const [broadcastUrl, setBroadcastUrl]       = useState("/fr");
+  const [broadcastZones, setBroadcastZones]   = useState<string[]>([]);
+  const [sending, setSending]                 = useState(false);
+  const [lastResult, setLastResult]           = useState<SendResult | null>(null);
 
-  // ── Historique ───────────────────────────────────────────────────────────
   const [history, setHistory]         = useState<HistoryEntry[]>([]);
   const [historyPage, setHistoryPage] = useState(1);
 
@@ -139,7 +135,6 @@ export default function NotificationsPage() {
     }
   };
 
-  // ── Éditer un template ───────────────────────────────────────────────────
   const startEdit = (template: Template) => {
     setEditingTemplate(template.type);
     setEditTitle(template.title);
@@ -166,7 +161,6 @@ export default function NotificationsPage() {
     }
   };
 
-  // ── Envoi broadcast ──────────────────────────────────────────────────────
   const handleBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!broadcastTitle.trim() || !broadcastBody.trim()) {
@@ -176,10 +170,14 @@ export default function NotificationsPage() {
     setSending(true);
     setLastResult(null);
     try {
+      // ── Cohérent avec la règle zones :
+      // zones vides → tous les abonnés broadcast actifs
+      // zones sélectionnées → uniquement les abonnés de ces zones
       const result = await apiPost<SendResult>("/notifications/broadcast", {
-        title: broadcastTitle.trim(),
-        body:  broadcastBody.trim(),
-        url:   broadcastUrl.trim() || "/fr",
+        title:       broadcastTitle.trim(),
+        body:        broadcastBody.trim(),
+        url:         broadcastUrl.trim() || "/fr",
+        targetZones: broadcastZones,
       });
       setLastResult(result);
 
@@ -189,7 +187,7 @@ export default function NotificationsPage() {
         body:   broadcastBody.trim(),
         sent:   result.sent,
         failed: result.failed,
-        zones:  [],
+        zones:  broadcastZones,
         sentAt: new Date().toISOString(),
       });
       setHistory(loadHistory());
@@ -200,10 +198,11 @@ export default function NotificationsPage() {
         description: `${result.sent} notifié(s) • ${result.failed} échec(s)`,
       });
 
-      // ── Réinitialiser automatiquement après succès ────────────────────
+      // Réinitialiser après succès
       setBroadcastTitle("");
       setBroadcastBody("");
       setBroadcastUrl("/fr");
+      setBroadcastZones([]);
 
       await fetchStats();
     } catch {
@@ -213,16 +212,24 @@ export default function NotificationsPage() {
     }
   };
 
-  // ── Pagination historique ────────────────────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(history.length / HISTORY_PAGE_SIZE));
   const pagedHistory = history.slice(
     (historyPage - 1) * HISTORY_PAGE_SIZE,
     historyPage * HISTORY_PAGE_SIZE,
   );
 
-  // ── Zones : affichage compact ────────────────────────────────────────────
   const zoneEntries = Object.entries(stats?.byZone ?? {}).sort(([, a], [, b]) => b - a);
   const visibleZones = showAllZones ? zoneEntries : zoneEntries.slice(0, 6);
+
+  // Audience estimée pour le broadcast
+  const broadcastAudience = (): string => {
+    if (!stats) return "—";
+    if (broadcastZones.length > 0) {
+      const total = broadcastZones.reduce((sum, z) => sum + (stats.byZone[z] ?? 0), 0);
+      return `~${total} abonné(s) dans ${broadcastZones.join(", ")}`;
+    }
+    return `${stats.active} abonné(s) actif(s)`;
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -231,7 +238,6 @@ export default function NotificationsPage() {
 
       <main className="p-4 sm:p-6">
 
-        {/* ── Titre ── */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Bell className="w-7 h-7" style={{ color: VITOGAZ_GREEN }} />
@@ -246,13 +252,12 @@ export default function NotificationsPage() {
           </Button>
         </div>
 
-        {/* ── Grille principale ── */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
           {/* ── Colonne gauche (2/3) ── */}
           <div className="xl:col-span-2 space-y-6">
 
-            {/* ── Stats compactes ── */}
+            {/* Stats */}
             <div className="grid grid-cols-3 gap-3">
               <Card>
                 <CardContent className="pt-4 pb-4">
@@ -289,16 +294,14 @@ export default function NotificationsPage() {
                     </div>
                     <div>
                       <p className="text-xs text-gray-500">Zones</p>
-                      <p className="text-lg font-bold text-blue-600">
-                        {loadingStats ? "—" : zoneEntries.length}
-                      </p>
+                      <p className="text-lg font-bold text-blue-600">{loadingStats ? "—" : zoneEntries.length}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* ── Zones compactes ── */}
+            {/* Zones compactes */}
             {zoneEntries.length > 0 && (
               <Card>
                 <CardContent className="pt-4 pb-4">
@@ -325,7 +328,7 @@ export default function NotificationsPage() {
               </Card>
             )}
 
-            {/* ── 1. Infos Vitogaz — envoi manuel (prioritaire) ── */}
+            {/* ── Infos Vitogaz — Broadcast manuel ── */}
             <Card className="border-2" style={{ borderColor: VITOGAZ_GREEN + "40" }}>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
@@ -347,45 +350,50 @@ export default function NotificationsPage() {
                       <Label htmlFor="bc-title">
                         Titre <span className="text-xs text-gray-400 font-normal">({broadcastTitle.length}/65)</span>
                       </Label>
-                      <Input
-                        id="bc-title"
-                        value={broadcastTitle}
+                      <Input id="bc-title" value={broadcastTitle}
                         onChange={(e) => setBroadcastTitle(e.target.value)}
                         placeholder="Ex: 📢 Information importante de Vitogaz"
-                        maxLength={65}
-                        required
-                        className="mt-1"
-                      />
+                        maxLength={65} required className="mt-1" />
                     </div>
                     <div>
                       <Label htmlFor="bc-body">
                         Message <span className="text-xs text-gray-400 font-normal">({broadcastBody.length}/240)</span>
                       </Label>
-                      <Textarea
-                        id="bc-body"
-                        value={broadcastBody}
+                      <Textarea id="bc-body" value={broadcastBody}
                         onChange={(e) => setBroadcastBody(e.target.value)}
                         placeholder="Ex: Nos agences seront fermées le samedi 30 mars"
-                        maxLength={240}
-                        rows={3}
-                        required
-                        className="mt-1"
-                      />
+                        maxLength={240} rows={3} required className="mt-1" />
                     </div>
                     <div>
                       <Label htmlFor="bc-url">Page à ouvrir au clic</Label>
-                      <Input
-                        id="bc-url"
-                        value={broadcastUrl}
+                      <Input id="bc-url" value={broadcastUrl}
                         onChange={(e) => setBroadcastUrl(e.target.value)}
-                        className="mt-1"
+                        className="mt-1" />
+                    </div>
+
+                    {/* ── Filtre par zone — cohérent avec la règle d'envoi ── */}
+                    <div>
+                      <Label>
+                        Restreindre à une zone{" "}
+                        <span className="font-normal text-gray-400">(optionnel)</span>
+                      </Label>
+                      <p className="text-xs text-gray-400 mb-2">
+                        Sans sélection → envoyé à tous les abonnés Infos Vitogaz actifs.
+                        Avec sélection → uniquement les abonnés ayant cette zone
+                        (les abonnés sans zone ne reçoivent pas).
+                      </p>
+                      <ZoneSelector
+                        selectedZones={broadcastZones}
+                        onChange={setBroadcastZones}
+                        label=""
+                        placeholder="Toutes les zones..."
                       />
                     </div>
 
                     {/* Résumé audience */}
                     <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 text-sm text-gray-600">
                       <Users className="w-3.5 h-3.5 flex-shrink-0" />
-                      Envoi à tous les abonnés actifs ({stats?.active ?? 0})
+                      <span>{broadcastAudience()}</span>
                     </div>
 
                     {/* Résultat dernier envoi */}
@@ -407,21 +415,23 @@ export default function NotificationsPage() {
                         {lastResult.sent === 0 && lastResult.failed === 0 && (
                           <div className="flex items-center gap-2 text-gray-500 text-sm">
                             <BellOff className="w-4 h-4" />
-                            Aucun abonné actif
+                            Aucun abonné correspondant
                           </div>
                         )}
                       </div>
                     )}
 
-                    <Button
-                      type="submit"
+                    <Button type="submit"
                       disabled={sending || !broadcastTitle.trim() || !broadcastBody.trim()}
-                      className="gap-2 text-white"
-                      style={{ backgroundColor: VITOGAZ_GREEN }}
-                    >
+                      className="gap-2 text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
                       {sending
                         ? <><Loader2 className="w-4 h-4 animate-spin" />Envoi en cours...</>
-                        : <><Send className="w-4 h-4" />Envoyer à tous</>
+                        : <><Send className="w-4 h-4" />
+                            {broadcastZones.length > 0
+                              ? `Envoyer aux zones sélectionnées`
+                              : "Envoyer à tous"
+                            }
+                          </>
                       }
                     </Button>
                   </form>
@@ -431,7 +441,7 @@ export default function NotificationsPage() {
               </CardContent>
             </Card>
 
-            {/* ── 2. Templates automatiques ── */}
+            {/* ── Templates automatiques ── */}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base">
@@ -466,16 +476,14 @@ export default function NotificationsPage() {
                             {canWrite && !isEditing && (
                               <Button variant="outline" size="sm" onClick={() => startEdit(template)}
                                 className="h-7 gap-1 text-xs">
-                                <Edit2 className="w-3 h-3" />
-                                Modifier
+                                <Edit2 className="w-3 h-3" />Modifier
                               </Button>
                             )}
                             {isEditing && (
                               <div className="flex gap-1.5">
                                 <Button variant="outline" size="sm" onClick={cancelEdit}
                                   className="h-7 gap-1 text-xs">
-                                  <X className="w-3 h-3" />
-                                  Annuler
+                                  <X className="w-3 h-3" />Annuler
                                 </Button>
                                 <Button size="sm" onClick={() => saveTemplate(template.type)}
                                   disabled={savingTemplate}
@@ -531,16 +539,14 @@ export default function NotificationsPage() {
 
           </div>
 
-          {/* ── Colonne droite (1/3) — Historique ── */}
+          {/* ── Colonne droite — Historique ── */}
           <div className="xl:col-span-1">
             <Card className="sticky top-20">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center justify-between">
                   <span>Historique</span>
                   {history.length > 0 && (
-                    <span className="text-xs font-normal text-gray-400">
-                      {history.length} envoi(s)
-                    </span>
+                    <span className="text-xs font-normal text-gray-400">{history.length} envoi(s)</span>
                   )}
                 </CardTitle>
               </CardHeader>
@@ -565,6 +571,11 @@ export default function NotificationsPage() {
                             </div>
                           </div>
                           <p className="text-xs text-gray-400 truncate">{entry.body}</p>
+                          {entry.zones.length > 0 && (
+                            <p className="text-xs mt-1" style={{ color: VITOGAZ_GREEN }}>
+                              {entry.zones.join(", ")}
+                            </p>
+                          )}
                           <p className="text-[10px] text-gray-300 mt-1">
                             {new Date(entry.sentAt).toLocaleString("fr-FR", {
                               day: "2-digit", month: "2-digit",
@@ -575,26 +586,17 @@ export default function NotificationsPage() {
                       ))}
                     </div>
 
-                    {/* Pagination */}
                     {totalPages > 1 && (
                       <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-                        <Button
-                          variant="outline" size="sm"
+                        <Button variant="outline" size="sm"
                           onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
-                          disabled={historyPage === 1}
-                          className="h-7 w-7 p-0"
-                        >
+                          disabled={historyPage === 1} className="h-7 w-7 p-0">
                           <ChevronLeft className="w-3.5 h-3.5" />
                         </Button>
-                        <span className="text-xs text-gray-500">
-                          {historyPage} / {totalPages}
-                        </span>
-                        <Button
-                          variant="outline" size="sm"
+                        <span className="text-xs text-gray-500">{historyPage} / {totalPages}</span>
+                        <Button variant="outline" size="sm"
                           onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))}
-                          disabled={historyPage === totalPages}
-                          className="h-7 w-7 p-0"
-                        >
+                          disabled={historyPage === totalPages} className="h-7 w-7 p-0">
                           <ChevronRight className="w-3.5 h-3.5" />
                         </Button>
                       </div>
