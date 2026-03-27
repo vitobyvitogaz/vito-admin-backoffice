@@ -19,115 +19,154 @@ import { Header } from "@/components/Header";
 import { Navigation } from "@/components/Navigation";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 
-const API_URL      = 'https://vito-backend-supabase.onrender.com/api/v1';
+const API_URL       = 'https://vito-backend-supabase.onrender.com/api/v1';
 const VITOGAZ_GREEN = "#008B7F";
 type SortKey = "title" | "discount" | "validity" | "zones" | "usage";
 
-// ── Composant ZonePills — multi-select avec recherche ─────────────────────────
-interface ZonePillsProps {
-  selectedZones: string[]
-  onChange:      (zones: string[]) => void
-}
-
-const ZonePills: React.FC<ZonePillsProps> = ({ selectedZones, onChange }) => {
-  const [zones, setZones]       = useState<string[]>([])
-  const [query, setQuery]       = useState("")
-  const [open, setOpen]         = useState(false)
-  const containerRef            = useRef<HTMLDivElement>(null)
+// ── ZonePills — multi-select avec recherche ───────────────────────────────────
+const ZonePills = ({ selectedZones, onChange }: { selectedZones: string[]; onChange: (z: string[]) => void }) => {
+  const [zones, setZones]   = useState<string[]>([])
+  const [query, setQuery]   = useState("")
+  const [open, setOpen]     = useState(false)
+  const ref                 = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     apiGet<{ id: string; name: string }[]>('/zones')
-      .then(data => setZones(data.map(z => z.name).sort((a, b) => a.localeCompare(b, 'fr'))))
+      .then(d => setZones(d.map(z => z.name).sort((a, b) => a.localeCompare(b, 'fr'))))
       .catch(() => {})
   }, [])
 
   useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener("mousedown", handleClick)
-    return () => document.removeEventListener("mousedown", handleClick)
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener("mousedown", h)
+    return () => document.removeEventListener("mousedown", h)
   }, [])
 
-  const filtered = zones.filter(z =>
-    z.toLowerCase().includes(query.toLowerCase()) && !selectedZones.includes(z)
-  )
-
-  const toggleZone = (zone: string) => {
-    if (selectedZones.includes(zone)) {
-      onChange(selectedZones.filter(z => z !== zone))
-    } else {
-      onChange([...selectedZones, zone])
-    }
-  }
+  const filtered = zones.filter(z => z.toLowerCase().includes(query.toLowerCase()) && !selectedZones.includes(z))
 
   return (
-    <div ref={containerRef} className="space-y-2">
-      {/* Pills sélectionnées */}
+    <div ref={ref} className="space-y-2">
       <div className="flex flex-wrap gap-1.5 min-h-[32px]">
-        {selectedZones.map(zone => (
-          <span key={zone} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
-            {zone}
-            <button type="button" onClick={() => toggleZone(zone)} className="hover:opacity-70 ml-0.5">
-              <X className="w-3 h-3" />
-            </button>
+        {selectedZones.map(z => (
+          <span key={z} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
+            {z}
+            <button type="button" onClick={() => onChange(selectedZones.filter(x => x !== z))}><X className="w-3 h-3" /></button>
           </span>
         ))}
-        {selectedZones.length === 0 && (
-          <span className="text-xs text-gray-400 self-center">Aucune zone sélectionnée</span>
-        )}
+        {selectedZones.length === 0 && <span className="text-xs text-gray-400 self-center">Aucune zone — laisser vide = toutes zones</span>}
       </div>
-
-      {/* Input recherche + dropdown */}
       <div className="relative">
-        <div
-          className="flex items-center gap-2 px-3 py-2 border border-input rounded-md bg-background cursor-text"
-          onClick={() => setOpen(true)}
-        >
+        <div className="flex items-center gap-2 px-3 py-2 border border-input rounded-md bg-background cursor-text" onClick={() => setOpen(true)}>
           <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-          <input
-            className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400"
-            placeholder="Rechercher et ajouter une zone..."
-            value={query}
-            onChange={e => { setQuery(e.target.value); setOpen(true) }}
-            onFocus={() => setOpen(true)}
-          />
+          <input className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400"
+            placeholder="Rechercher une zone..." value={query}
+            onChange={e => { setQuery(e.target.value); setOpen(true) }} onFocus={() => setOpen(true)} />
           <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} strokeWidth={1.5} />
         </div>
-
         {open && (
           <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-            {filtered.length === 0 ? (
-              <p className="px-3 py-2.5 text-sm text-gray-400">
-                {query ? `Aucune zone pour "${query}"` : "Toutes les zones sont sélectionnées"}
-              </p>
-            ) : (
-              filtered.map(zone => (
-                <button
-                  key={zone}
-                  type="button"
-                  onMouseDown={e => { e.preventDefault(); toggleZone(zone); setQuery("") }}
-                  className="w-full flex items-center justify-between px-3 py-2 text-sm text-left hover:bg-gray-50 transition-colors"
-                >
-                  <span>{zone}</span>
+            {filtered.length === 0
+              ? <p className="px-3 py-2.5 text-sm text-gray-400">{query ? `Aucune zone pour "${query}"` : "Tout sélectionné"}</p>
+              : filtered.map(z => (
+                <button key={z} type="button"
+                  onMouseDown={e => { e.preventDefault(); onChange([...selectedZones, z]); setQuery("") }}
+                  className="w-full flex items-center px-3 py-2 text-sm text-left hover:bg-gray-50 transition-colors">
+                  {z}
                 </button>
               ))
-            )}
+            }
           </div>
         )}
       </div>
-
       {selectedZones.length > 0 && (
-        <button
-          type="button"
-          onClick={() => onChange([])}
-          className="text-xs text-gray-400 hover:text-red-500 transition-colors"
-        >
+        <button type="button" onClick={() => onChange([])} className="text-xs text-gray-400 hover:text-red-500 transition-colors">
           Tout effacer
         </button>
       )}
+    </div>
+  )
+}
+
+// ── ProductSelector — sélection depuis la vraie BDD ──────────────────────────
+interface Product { id: string; name: string; category: string; is_active: boolean }
+
+const ProductSelector = ({ selectedIds, onChange }: { selectedIds: string[]; onChange: (ids: string[]) => void }) => {
+  const [products, setProducts]   = useState<Product[]>([])
+  const [query, setQuery]         = useState("")
+  const [loading, setLoading]     = useState(true)
+
+  useEffect(() => {
+    apiGet<Product[]>('/products')
+      .then(d => setProducts(d.filter(p => p.is_active)))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const toggle = (id: string) => {
+    onChange(selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id])
+  }
+
+  const filtered = products.filter(p =>
+    p.name.toLowerCase().includes(query.toLowerCase()) ||
+    p.category.toLowerCase().includes(query.toLowerCase())
+  )
+
+  // Grouper par catégorie
+  const grouped = filtered.reduce<Record<string, Product[]>>((acc, p) => {
+    if (!acc[p.category]) acc[p.category] = []
+    acc[p.category].push(p)
+    return acc
+  }, {})
+
+  if (loading) return <p className="text-sm text-gray-400">Chargement des produits...</p>
+
+  return (
+    <div className="space-y-3">
+      {/* Selected pills */}
+      {selectedIds.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {selectedIds.map(id => {
+            const p = products.find(x => x.id === id)
+            if (!p) return null
+            return (
+              <span key={id} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
+                {p.name}
+                <button type="button" onClick={() => toggle(id)}><X className="w-3 h-3" /></button>
+              </span>
+            )
+          })}
+          <button type="button" onClick={() => onChange([])} className="text-xs text-gray-400 hover:text-red-500 transition-colors self-center">
+            Tout effacer
+          </button>
+        </div>
+      )}
+
+      {/* Recherche */}
+      <div className="relative">
+        <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-gray-400" />
+        <Input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher un produit..." className="pl-9 h-9 text-sm" />
+      </div>
+
+      {/* Liste groupée par catégorie */}
+      <div className="border border-gray-200 rounded-lg overflow-hidden max-h-56 overflow-y-auto">
+        {Object.entries(grouped).map(([category, items]) => (
+          <div key={category}>
+            <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-100 sticky top-0">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{category}</p>
+            </div>
+            {items.map(p => (
+              <button key={p.id} type="button" onClick={() => toggle(p.id)}
+                className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0">
+                <span className="text-sm text-gray-700">{p.name}</span>
+                {selectedIds.includes(p.id) && <Check className="w-4 h-4 flex-shrink-0" style={{ color: VITOGAZ_GREEN }} />}
+              </button>
+            ))}
+          </div>
+        ))}
+        {Object.keys(grouped).length === 0 && (
+          <p className="px-3 py-4 text-sm text-gray-400 text-center">Aucun produit trouvé</p>
+        )}
+      </div>
     </div>
   )
 }
@@ -166,8 +205,7 @@ export default function PromotionsPage() {
   const [togglingId, setTogglingId]           = useState<string | null>(null);
   const [showPopupConfig, setShowPopupConfig] = useState(false);
   const [popupSettings, setPopupSettings]     = useState<PopupSettings>({
-    cooldown_hours: 48, delay_seconds: 3,
-    allowed_pages: ['home'], auto_close_seconds: 30, enabled: true,
+    cooldown_hours: 48, delay_seconds: 3, allowed_pages: ['home'], auto_close_seconds: 30, enabled: true,
   });
   const [savingPopup, setSavingPopup]         = useState(false);
 
@@ -176,13 +214,15 @@ export default function PromotionsPage() {
 
   const [formData, setFormData] = useState({
     title: "", subtitle: "", description: "", discount_value: "",
-    discount_type: "percentage", promo_code: "", valid_from: "", valid_until: "",
-    image_url: "", product_category: "", zones: [] as string[],
-    applicable_products: [] as string[], conditions: [] as string[],
+    discount_type: "percentage", promo_code: "",
+    valid_from: "", valid_until: "",
+    image_url: "", product_category: "",
+    zones: [] as string[],
+    applicable_product_ids: [] as string[],  // IDs des vrais produits
+    conditions: [] as string[],
     max_usage: "", is_active: true, is_featured: false, display_order: "0",
   });
 
-  const [newProduct, setNewProduct]     = useState("");
   const [newCondition, setNewCondition] = useState("");
 
   useEffect(() => { fetchPromotions(); fetchPopupSettings(); }, []);
@@ -211,8 +251,8 @@ export default function PromotionsPage() {
     setSortedPromotions(sorted);
   }, [filteredPromotions, sortColumn, sortDirection]);
 
-  const handleSort = (column: SortKey) => {
-    if (sortColumn !== column) { setSortColumn(column); setSortDirection("asc"); }
+  const handleSort = (col: SortKey) => {
+    if (sortColumn !== col) { setSortColumn(col); setSortDirection("asc"); }
     else if (sortDirection === "asc") setSortDirection("desc");
     else { setSortColumn(null); setSortDirection(null); }
   };
@@ -223,10 +263,10 @@ export default function PromotionsPage() {
     return <ArrowDown className="w-3.5 h-3.5 ml-1 inline" style={{ color: VITOGAZ_GREEN }} />;
   };
 
-  const sortLabel = (): string | null => {
+  const sortLabel = () => {
     if (!sortColumn || !sortDirection) return null;
-    if (sortColumn === "zones")    return `Trié par Zones (${sortDirection === "desc" ? "Plus de zones" : "Moins de zones"})`;
-    if (sortColumn === "usage")    return `Trié par Utilisations (${sortDirection === "desc" ? "Plus utilisées" : "Moins utilisées"})`;
+    if (sortColumn === "zones")    return `Trié par Zones (${sortDirection === "desc" ? "Plus" : "Moins"})`;
+    if (sortColumn === "usage")    return `Trié par Utilisations (${sortDirection === "desc" ? "Décroissant" : "Croissant"})`;
     if (sortColumn === "discount") return `Trié par Réduction (${sortDirection === "desc" ? "Décroissant" : "Croissant"})`;
     if (sortColumn === "validity") return `Trié par Validité (${sortDirection === "desc" ? "Expire le plus tard" : "Expire bientôt"})`;
     return `Trié par Titre (${sortDirection === "asc" ? "A → Z" : "Z → A"})`;
@@ -235,20 +275,16 @@ export default function PromotionsPage() {
   const fetchPromotions = async () => {
     try {
       const data = await apiGet<Promotion[]>('/promotions');
-      setPromotions(data || []);
-      setFilteredPromotions(data || []);
-      setSortedPromotions(data || []);
-    } catch {
-      toast({ title: "Erreur", description: "Impossible de charger les promotions", variant: "destructive" });
-    } finally { setLoading(false); }
+      setPromotions(data || []); setFilteredPromotions(data || []); setSortedPromotions(data || []);
+    } catch { toast({ title: "Erreur", description: "Impossible de charger les promotions", variant: "destructive" }); }
+    finally { setLoading(false); }
   };
 
   const fetchPopupSettings = async () => {
     try {
       const data = await apiGet<any>('/settings/popup_settings');
       if (!data) return;
-      // L'API peut retourner { setting_value: "{...}" } ou directement l'objet
-      const raw = data?.setting_value ?? data?.value ?? data;
+      const raw    = data?.setting_value ?? data?.value ?? data;
       const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
       setPopupSettings(prev => ({ ...prev, ...parsed }));
     } catch {}
@@ -257,11 +293,12 @@ export default function PromotionsPage() {
   const savePopupSettings = async () => {
     setSavingPopup(true);
     try {
-      // Envoyer setting_value comme string JSON pour matcher le schéma app_settings
-      await apiPatch('/settings/popup_settings', {
+      // ── Endpoint correct : PATCH /settings/key/:key ──────────────────────
+      await apiPatch('/settings/key/popup_settings', {
         setting_value: JSON.stringify(popupSettings),
       });
       toast({ title: "Succès !", description: "Configuration popup sauvegardée" });
+      setShowPopupConfig(false);
     } catch {
       toast({ title: "Erreur", description: "Impossible de sauvegarder", variant: "destructive" });
     } finally { setSavingPopup(false); }
@@ -271,7 +308,7 @@ export default function PromotionsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) { toast({ title: "Erreur", description: "Veuillez sélectionner une image", variant: "destructive" }); return; }
-    if (file.size > 5 * 1024 * 1024) { toast({ title: "Erreur", description: "L'image ne doit pas dépasser 5 MB", variant: "destructive" }); return; }
+    if (file.size > 5 * 1024 * 1024) { toast({ title: "Erreur", description: "5 MB maximum", variant: "destructive" }); return; }
     try {
       setUploading(true);
       const fd = new FormData(); fd.append('file', file);
@@ -280,43 +317,42 @@ export default function PromotionsPage() {
       const data = await res.json();
       setFormData(p => ({ ...p, image_url: data.file_url }));
       toast({ title: "Succès !", description: "Image uploadée" });
-    } catch { toast({ title: "Erreur", description: "Erreur upload image", variant: "destructive" }); }
+    } catch { toast({ title: "Erreur", description: "Erreur upload", variant: "destructive" }); }
     finally { setUploading(false); }
   };
 
-  // ── Vérifier qu'une seule promo est featured ──────────────────────────────
   const handleFeaturedChange = (checked: boolean) => {
     if (checked) {
-      const currentFeatured = promotions.find(p => p.is_featured && p.id !== editingId);
-      if (currentFeatured) {
-        toast({
-          title: "Attention",
-          description: `"${currentFeatured.title}" est déjà mise en avant. Elle sera remplacée.`,
-        });
-      }
+      const curr = promotions.find(p => p.is_featured && p.id !== editingId);
+      if (curr) toast({ title: "Attention", description: `"${curr.title}" sera remplacée en tant que Promo du moment.` });
     }
     setFormData(p => ({ ...p, is_featured: checked }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (formData.zones.length === 0) { toast({ title: "Erreur", description: "Veuillez sélectionner au moins une zone", variant: "destructive" }); return; }
     const payload = {
-      title: formData.title, subtitle: formData.subtitle || null,
-      description: formData.description || "Promotion spéciale",
-      discount_value: parseFloat(formData.discount_value), discount_type: formData.discount_type,
-      promo_code: formData.promo_code || null,
-      valid_from: formData.valid_from ? new Date(formData.valid_from + 'T00:00:00Z').toISOString() : undefined,
-      valid_until: new Date(formData.valid_until + 'T23:59:59Z').toISOString(),
-      image_url: formData.image_url || null, product_category: formData.product_category || null,
-      zones: formData.zones, applicable_products: formData.applicable_products,
-      conditions: formData.conditions, max_usage: formData.max_usage ? parseInt(formData.max_usage) : null,
-      is_active: formData.is_active, is_featured: formData.is_featured,
-      display_order: parseInt(formData.display_order) || 0,
+      title:                formData.title,
+      subtitle:             formData.subtitle || null,
+      description:          formData.description || "Promotion spéciale",
+      discount_value:       parseFloat(formData.discount_value),
+      discount_type:        formData.discount_type,
+      promo_code:           formData.promo_code || null,
+      valid_from:           formData.valid_from ? new Date(formData.valid_from + 'T00:00:00Z').toISOString() : undefined,
+      valid_until:          new Date(formData.valid_until + 'T23:59:59Z').toISOString(),
+      image_url:            formData.image_url || null,
+      product_category:     formData.product_category || null,
+      zones:                formData.zones,
+      applicable_products:  formData.applicable_product_ids, // IDs → le backend mappe les noms
+      conditions:           formData.conditions,
+      max_usage:            formData.max_usage ? parseInt(formData.max_usage) : null,
+      is_active:            formData.is_active,
+      is_featured:          formData.is_featured,
+      display_order:        parseInt(formData.display_order) || 0,
     };
     try {
       if (editingId) { await apiPatch(`/promotions/${editingId}`, payload); toast({ title: "Succès !", description: "Promotion modifiée" }); }
-      else { await apiPost('/promotions', payload); toast({ title: "Succès !", description: "Promotion créée" }); }
+      else           { await apiPost('/promotions', payload);               toast({ title: "Succès !", description: "Promotion créée" }); }
       await fetchPromotions(); resetForm();
     } catch { toast({ title: "Erreur", description: "Erreur lors de la sauvegarde", variant: "destructive" }); }
   };
@@ -325,20 +361,20 @@ export default function PromotionsPage() {
     setFormData({
       title: promo.title, subtitle: promo.subtitle || "", description: promo.description || "",
       discount_value: promo.discount_value.toString(), discount_type: promo.discount_type,
-      promo_code: promo.promo_code || "", valid_from: promo.valid_from.split("T")[0],
-      valid_until: promo.valid_until.split("T")[0], image_url: promo.image_url || "",
-      product_category: promo.product_category || "", zones: promo.zones || [],
-      applicable_products: promo.applicable_products || [], conditions: promo.conditions || [],
-      max_usage: promo.max_usage?.toString() || "", is_active: promo.is_active,
-      is_featured: promo.is_featured, display_order: promo.display_order.toString(),
+      promo_code: promo.promo_code || "",
+      valid_from: promo.valid_from.split("T")[0], valid_until: promo.valid_until.split("T")[0],
+      image_url: promo.image_url || "", product_category: promo.product_category || "",
+      zones: promo.zones || [], applicable_product_ids: promo.applicable_products || [],
+      conditions: promo.conditions || [], max_usage: promo.max_usage?.toString() || "",
+      is_active: promo.is_active, is_featured: promo.is_featured, display_order: promo.display_order.toString(),
     });
     setEditingId(promo.id); setShowForm(true);
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Supprimer cette promotion ?")) return;
-    try { await apiDelete(`/promotions/${id}`); toast({ title: "Succès !", description: "Promotion supprimée" }); await fetchPromotions(); }
-    catch { toast({ title: "Erreur", description: "Erreur suppression", variant: "destructive" }); }
+    try { await apiDelete(`/promotions/${id}`); toast({ title: "Succès !" }); await fetchPromotions(); }
+    catch { toast({ title: "Erreur", variant: "destructive" }); }
   };
 
   const handleToggleActive = async (promo: Promotion) => {
@@ -348,7 +384,7 @@ export default function PromotionsPage() {
       await apiPatch(`/promotions/${promo.id}`, { is_active: !promo.is_active });
       toast({ title: "Succès !", description: `Promotion ${!promo.is_active ? "activée" : "désactivée"}` });
       await fetchPromotions();
-    } catch { toast({ title: "Erreur", description: "Impossible de modifier le statut", variant: "destructive" }); }
+    } catch { toast({ title: "Erreur", variant: "destructive" }); }
     finally { setTogglingId(null); }
   };
 
@@ -356,28 +392,24 @@ export default function PromotionsPage() {
     setFormData({
       title: "", subtitle: "", description: "", discount_value: "", discount_type: "percentage",
       promo_code: "", valid_from: "", valid_until: "", image_url: "", product_category: "",
-      zones: [], applicable_products: [], conditions: [], max_usage: "",
+      zones: [], applicable_product_ids: [], conditions: [], max_usage: "",
       is_active: true, is_featured: false, display_order: "0",
     });
-    setEditingId(null); setShowForm(false); setNewProduct(""); setNewCondition("");
+    setNewCondition(""); setEditingId(null); setShowForm(false);
   };
 
   const isEffectivelyActive = (p: Promotion) => {
     try { return p.is_active && new Date() <= new Date(p.valid_until); } catch { return false; }
   };
 
-  const formatDate = (d: string): string => {
-    try { const date = new Date(d); return isNaN(date.getTime()) ? "-" : date.toLocaleDateString("fr-FR"); } catch { return "-"; }
-  };
+  const fmt = (d: string) => { try { const dt = new Date(d); return isNaN(dt.getTime()) ? "-" : dt.toLocaleDateString("fr-FR"); } catch { return "-"; } };
 
-  const toggleAllowedPage = (page: string) => {
-    setPopupSettings(s => ({
-      ...s,
-      allowed_pages: s.allowed_pages.includes(page)
-        ? s.allowed_pages.filter(p => p !== page)
-        : [...s.allowed_pages, page],
-    }));
-  };
+  const toggleAllowedPage = (page: string) => setPopupSettings(s => ({
+    ...s,
+    allowed_pages: s.allowed_pages.includes(page)
+      ? s.allowed_pages.filter(p => p !== page)
+      : [...s.allowed_pages, page],
+  }));
 
   const colSpan = 8 + (canWrite ? 1 : 0);
 
@@ -405,11 +437,9 @@ export default function PromotionsPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* Config popup */}
             {canWrite && (
               <Button variant="outline" onClick={() => setShowPopupConfig(!showPopupConfig)} className="gap-2">
-                <Settings className="w-4 h-4" />
-                Config popup
+                <Settings className="w-4 h-4" />Config popup
               </Button>
             )}
             {canDelete && (
@@ -421,7 +451,7 @@ export default function PromotionsPage() {
           </div>
         </div>
 
-        {/* ── Config popup ── */}
+        {/* Config popup */}
         {showPopupConfig && canWrite && (
           <Card className="mb-6 border-2" style={{ borderColor: VITOGAZ_GREEN + "30" }}>
             <CardHeader className="pb-3">
@@ -432,66 +462,45 @@ export default function PromotionsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-
-                {/* Activé */}
                 <div className="flex items-center gap-2">
                   <input type="checkbox" id="popup_enabled" checked={popupSettings.enabled}
                     onChange={e => setPopupSettings(s => ({ ...s, enabled: e.target.checked }))} className="w-4 h-4" />
                   <Label htmlFor="popup_enabled" className="cursor-pointer">Popup activé</Label>
                 </div>
-
-                {/* Cooldown */}
                 <div>
-                  <Label htmlFor="cooldown">Cooldown (heures)</Label>
-                  <Input id="cooldown" type="number" min="0" max="720"
-                    value={popupSettings.cooldown_hours}
-                    onChange={e => setPopupSettings(s => ({ ...s, cooldown_hours: parseInt(e.target.value) || 0 }))}
-                    className="mt-1" />
-                  <p className="text-xs text-gray-400 mt-1">0 = toujours, 48 = 1x toutes les 48h</p>
+                  <Label>Cooldown (heures)</Label>
+                  <Input type="number" min="0" max="720" value={popupSettings.cooldown_hours}
+                    onChange={e => setPopupSettings(s => ({ ...s, cooldown_hours: parseInt(e.target.value)||0 }))} className="mt-1" />
+                  <p className="text-xs text-gray-400 mt-1">0 = toujours · 48 = 1x/48h</p>
                 </div>
-
-                {/* Délai d'apparition */}
                 <div>
-                  <Label htmlFor="delay">Délai d'apparition (secondes)</Label>
-                  <Input id="delay" type="number" min="0" max="60"
-                    value={popupSettings.delay_seconds}
-                    onChange={e => setPopupSettings(s => ({ ...s, delay_seconds: parseInt(e.target.value) || 0 }))}
-                    className="mt-1" />
+                  <Label>Délai d'apparition (sec)</Label>
+                  <Input type="number" min="0" max="60" value={popupSettings.delay_seconds}
+                    onChange={e => setPopupSettings(s => ({ ...s, delay_seconds: parseInt(e.target.value)||0 }))} className="mt-1" />
                 </div>
-
-                {/* Fermeture auto */}
                 <div>
-                  <Label htmlFor="autoclose">Fermeture auto (secondes)</Label>
-                  <Input id="autoclose" type="number" min="5" max="120"
-                    value={popupSettings.auto_close_seconds}
-                    onChange={e => setPopupSettings(s => ({ ...s, auto_close_seconds: parseInt(e.target.value) || 30 }))}
-                    className="mt-1" />
+                  <Label>Fermeture auto (sec)</Label>
+                  <Input type="number" min="5" max="120" value={popupSettings.auto_close_seconds}
+                    onChange={e => setPopupSettings(s => ({ ...s, auto_close_seconds: parseInt(e.target.value)||30 }))} className="mt-1" />
                 </div>
               </div>
-
-              {/* Pages autorisées */}
               <div>
-                <Label>Pages où le popup peut apparaître</Label>
+                <Label>Pages autorisées</Label>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {Object.entries(PAGE_LABELS).map(([page, label]) => {
                     const active = popupSettings.allowed_pages.includes(page);
                     return (
                       <button key={page} type="button" onClick={() => toggleAllowedPage(page)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
-                          active ? "text-white border-transparent" : "border-gray-200 text-gray-500 hover:border-gray-300"
-                        }`}
-                        style={active ? { backgroundColor: VITOGAZ_GREEN, borderColor: VITOGAZ_GREEN } : {}}
-                      >
-                        {active && <Check className="w-3 h-3" />}
-                        {label}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border-2 transition-all ${active ? "text-white border-transparent" : "border-gray-200 text-gray-500 hover:border-gray-300"}`}
+                        style={active ? { backgroundColor: VITOGAZ_GREEN, borderColor: VITOGAZ_GREEN } : {}}>
+                        {active && <Check className="w-3 h-3" />}{label}
                       </button>
                     );
                   })}
                 </div>
               </div>
-
               <Button onClick={savePopupSettings} disabled={savingPopup} className="text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
-                {savingPopup ? "Sauvegarde..." : "Enregistrer la configuration"}
+                {savingPopup ? "Sauvegarde..." : "Enregistrer"}
               </Button>
             </CardContent>
           </Card>
@@ -506,24 +515,24 @@ export default function PromotionsPage() {
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
 
-                {/* Informations générales */}
+                {/* 1. Informations générales */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold border-b pb-2">Informations générales</h3>
+                  <h3 className="text-lg font-semibold border-b pb-2">1. Informations générales</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="md:col-span-2">
-                      <Label htmlFor="title">Titre *</Label>
-                      <Input id="title" required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="Ex: Fety Masaka 2025" />
+                      <Label>Titre *</Label>
+                      <Input required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="Ex: Fety Masaka 2025" />
                     </div>
                     <div className="md:col-span-2">
-                      <Label htmlFor="subtitle">Sous-titre</Label>
-                      <Input id="subtitle" value={formData.subtitle} onChange={e => setFormData({...formData, subtitle: e.target.value})} placeholder="Ex: Promotion de fin d'année" />
+                      <Label>Sous-titre</Label>
+                      <Input value={formData.subtitle} onChange={e => setFormData({...formData, subtitle: e.target.value})} placeholder="Ex: Promotion de fin d'année" />
                     </div>
                     <div className="md:col-span-2">
-                      <Label htmlFor="description">Description</Label>
-                      <Textarea id="description" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} rows={3} placeholder="Détails de la promotion" />
+                      <Label>Description</Label>
+                      <Textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} rows={3} placeholder="Détails de la promotion" />
                     </div>
                     <div className="md:col-span-2">
-                      <Label htmlFor="image">Image</Label>
+                      <Label>Image</Label>
                       <div className="mt-2">
                         {formData.image_url ? (
                           <div className="space-y-2">
@@ -545,32 +554,59 @@ export default function PromotionsPage() {
                   </div>
                 </div>
 
-                {/* Réduction */}
+                {/* 2. Réduction */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold border-b pb-2">Réduction</h3>
+                  <h3 className="text-lg font-semibold border-b pb-2">2. Réduction</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="discount_type">Type *</Label>
-                      <select id="discount_type" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      <Label>Type *</Label>
+                      <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1"
                         value={formData.discount_type} onChange={e => setFormData({...formData, discount_type: e.target.value})}>
                         <option value="percentage">Pourcentage (%)</option>
                         <option value="fixed">Montant fixe (Ar)</option>
                       </select>
                     </div>
                     <div>
-                      <Label htmlFor="discount_value">Valeur *</Label>
-                      <Input id="discount_value" type="number" min="0" max={formData.discount_type === "percentage" ? "100" : undefined} step="0.01" required
-                        value={formData.discount_value} onChange={e => setFormData({...formData, discount_value: e.target.value})} />
+                      <Label>Valeur *</Label>
+                      <Input type="number" min="0" max={formData.discount_type === "percentage" ? "100" : undefined} step="0.01" required
+                        className="mt-1" value={formData.discount_value} onChange={e => setFormData({...formData, discount_value: e.target.value})} />
+                    </div>
+                    <div className="md:col-span-2">
+                      <Label>Code avantage <span className="text-xs font-normal text-gray-400">(à montrer au revendeur physique)</span></Label>
+                      <Input className="mt-1" placeholder="Ex: FETY2025" value={formData.promo_code}
+                        onChange={e => setFormData({...formData, promo_code: e.target.value.toUpperCase()})} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Période de validité */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold border-b pb-2">3. Période de validité</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label>Date de début</Label>
+                      <Input type="date" className="mt-1" value={formData.valid_from} onChange={e => setFormData({...formData, valid_from: e.target.value})} />
                     </div>
                     <div>
-                      <Label htmlFor="promo_code">Code avantage</Label>
-                      <Input id="promo_code" placeholder="Ex: FETY2025 — à montrer au revendeur"
-                        value={formData.promo_code} onChange={e => setFormData({...formData, promo_code: e.target.value.toUpperCase()})} />
-                      <p className="text-xs text-gray-400 mt-1">Ce code est montré par l'utilisateur à son revendeur physique</p>
+                      <Label>Date de fin *</Label>
+                      <Input type="date" required className="mt-1" value={formData.valid_until} onChange={e => setFormData({...formData, valid_until: e.target.value})} />
                     </div>
+                  </div>
+                </div>
+
+                {/* 4. Zones */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold border-b pb-2">4. Zones concernées <span className="text-sm font-normal text-gray-400">(vide = toutes zones)</span></h3>
+                  <ZonePills selectedZones={formData.zones} onChange={zones => setFormData({...formData, zones})} />
+                </div>
+
+                {/* 5. Produits */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold border-b pb-2">5. Produits applicables</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="product_category">Catégorie produit</Label>
-                      <select id="product_category" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      <Label>Catégorie de produit</Label>
+                      <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1"
                         value={formData.product_category} onChange={e => setFormData({...formData, product_category: e.target.value})}>
                         <option value="">Toutes catégories</option>
                         <option value="bouteille">Bouteilles</option>
@@ -582,54 +618,24 @@ export default function PromotionsPage() {
                         <option value="accessoire">Accessoires</option>
                       </select>
                     </div>
-                  </div>
-                </div>
-
-                {/* Période */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold border-b pb-2">Période de validité</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="valid_from">Date de début</Label>
-                      <Input id="valid_from" type="date" value={formData.valid_from} onChange={e => setFormData({...formData, valid_from: e.target.value})} />
-                    </div>
-                    <div>
-                      <Label htmlFor="valid_until">Date de fin *</Label>
-                      <Input id="valid_until" type="date" required value={formData.valid_until} onChange={e => setFormData({...formData, valid_until: e.target.value})} />
+                    <div className="md:col-span-2">
+                      <Label>Produits spécifiques <span className="text-xs font-normal text-gray-400">(optionnel — sélectionner dans la liste)</span></Label>
+                      <div className="mt-2">
+                        <ProductSelector selectedIds={formData.applicable_product_ids} onChange={ids => setFormData({...formData, applicable_product_ids: ids})} />
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* ── Zones — Pills multi-select avec recherche ── */}
+                {/* 6. Conditions */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold border-b pb-2">Zones concernées *</h3>
-                  <ZonePills selectedZones={formData.zones} onChange={zones => setFormData({...formData, zones})} />
-                </div>
-
-                {/* Produits applicables */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold border-b pb-2">Produits applicables</h3>
-                  <div className="flex gap-2">
-                    <Input value={newProduct} onChange={e => setNewProduct(e.target.value)} placeholder="Ex: Bouteille 12.5kg"
-                      onKeyPress={e => { if (e.key === 'Enter') { e.preventDefault(); if (newProduct.trim()) { setFormData(p => ({...p, applicable_products: [...p.applicable_products, newProduct.trim()]})); setNewProduct(""); } } }} />
-                    <Button type="button" onClick={() => { if (newProduct.trim()) { setFormData(p => ({...p, applicable_products: [...p.applicable_products, newProduct.trim()]})); setNewProduct(""); } }} variant="outline"><Plus className="w-4 h-4" /></Button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {formData.applicable_products.map((p, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm" style={{ backgroundColor: "#e6f4f3", color: VITOGAZ_GREEN }}>
-                        {p}<button type="button" onClick={() => setFormData(prev => ({...prev, applicable_products: prev.applicable_products.filter(x => x !== p)}))}>×</button>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Conditions */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold border-b pb-2">Conditions</h3>
+                  <h3 className="text-lg font-semibold border-b pb-2">6. Conditions</h3>
                   <div className="flex gap-2">
                     <Input value={newCondition} onChange={e => setNewCondition(e.target.value)} placeholder="Ex: Minimum 2 bouteilles"
                       onKeyPress={e => { if (e.key === 'Enter') { e.preventDefault(); if (newCondition.trim()) { setFormData(p => ({...p, conditions: [...p.conditions, newCondition.trim()]})); setNewCondition(""); } } }} />
-                    <Button type="button" onClick={() => { if (newCondition.trim()) { setFormData(p => ({...p, conditions: [...p.conditions, newCondition.trim()]})); setNewCondition(""); } }} variant="outline"><Plus className="w-4 h-4" /></Button>
+                    <Button type="button" variant="outline" onClick={() => { if (newCondition.trim()) { setFormData(p => ({...p, conditions: [...p.conditions, newCondition.trim()]})); setNewCondition(""); } }}>
+                      <Plus className="w-4 h-4" />
+                    </Button>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {formData.conditions.map((c, i) => (
@@ -640,17 +646,17 @@ export default function PromotionsPage() {
                   </div>
                 </div>
 
-                {/* Paramètres */}
+                {/* 7. Paramètres */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold border-b pb-2">Paramètres</h3>
+                  <h3 className="text-lg font-semibold border-b pb-2">7. Paramètres</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="max_usage">Nombre max d'utilisations</Label>
-                      <Input id="max_usage" type="number" min="0" value={formData.max_usage} onChange={e => setFormData({...formData, max_usage: e.target.value})} placeholder="Vide = illimité" />
+                      <Label>Nombre max d'utilisations</Label>
+                      <Input type="number" min="0" className="mt-1" value={formData.max_usage} onChange={e => setFormData({...formData, max_usage: e.target.value})} placeholder="Vide = illimité" />
                     </div>
                     <div>
-                      <Label htmlFor="display_order">Ordre d'affichage</Label>
-                      <Input id="display_order" type="number" min="0" value={formData.display_order} onChange={e => setFormData({...formData, display_order: e.target.value})} />
+                      <Label>Ordre d'affichage</Label>
+                      <Input type="number" min="0" className="mt-1" value={formData.display_order} onChange={e => setFormData({...formData, display_order: e.target.value})} />
                     </div>
                     <div className="flex items-center gap-2">
                       <input type="checkbox" id="is_active" checked={formData.is_active} onChange={e => setFormData({...formData, is_active: e.target.checked})} className="w-4 h-4" />
@@ -660,8 +666,7 @@ export default function PromotionsPage() {
                       <input type="checkbox" id="is_featured" checked={formData.is_featured} onChange={e => handleFeaturedChange(e.target.checked)} className="w-4 h-4" />
                       <Label htmlFor="is_featured" className="cursor-pointer flex items-center gap-1.5">
                         <Star className="w-3.5 h-3.5 text-amber-500" strokeWidth={1.5} />
-                        Promo du moment
-                        <span className="text-xs text-gray-400 font-normal">(1 seule à la fois)</span>
+                        Promo du moment <span className="text-xs text-gray-400 font-normal">(1 seule à la fois)</span>
                       </Label>
                     </div>
                   </div>
@@ -713,16 +718,15 @@ export default function PromotionsPage() {
               {loading ? (
                 <TableRow><TableCell colSpan={colSpan} className="text-center py-8">Chargement...</TableCell></TableRow>
               ) : sortedPromotions.length === 0 ? (
-                <TableRow><TableCell colSpan={colSpan} className="text-center py-8">Aucune promotion trouvée</TableCell></TableRow>
+                <TableRow><TableCell colSpan={colSpan} className="text-center py-8">Aucune promotion</TableCell></TableRow>
               ) : (
                 sortedPromotions.map(promo => (
                   <TableRow key={promo.id} className={!promo.is_active ? "opacity-50" : ""}>
                     <TableCell>
-                      {promo.image_url ? (
-                        <img src={promo.image_url} alt={promo.title} className="w-12 h-12 object-cover rounded-lg" />
-                      ) : (
-                        <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center"><ImageIcon className="w-5 h-5 text-gray-400" /></div>
-                      )}
+                      {promo.image_url
+                        ? <img src={promo.image_url} alt={promo.title} className="w-12 h-12 object-cover rounded-lg" />
+                        : <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center"><ImageIcon className="w-5 h-5 text-gray-400" /></div>
+                      }
                     </TableCell>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-1.5">
@@ -738,20 +742,18 @@ export default function PromotionsPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-xs text-gray-600">
-                      <div>{formatDate(promo.valid_from)}</div>
-                      <div className="text-gray-400">→ {formatDate(promo.valid_until)}</div>
+                      <div>{fmt(promo.valid_from)}</div>
+                      <div className="text-gray-400">→ {fmt(promo.valid_until)}</div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {promo.zones?.length > 0 ? (
-                          <>
-                            {promo.zones.slice(0, 2).map((z, i) => (
-                              <span key={i} className="px-2 py-0.5 text-xs rounded-full" style={{ backgroundColor: "#e6f4f3", color: VITOGAZ_GREEN }}>{z}</span>
-                            ))}
-                            {promo.zones.length > 2 && <span className="text-xs text-gray-400">+{promo.zones.length - 2}</span>}
-                          </>
-                        ) : <span className="text-gray-400 text-xs">Toutes zones</span>}
-                      </div>
+                      {promo.zones?.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {promo.zones.slice(0, 2).map((z, i) => (
+                            <span key={i} className="px-2 py-0.5 text-xs rounded-full" style={{ backgroundColor: "#e6f4f3", color: VITOGAZ_GREEN }}>{z}</span>
+                          ))}
+                          {promo.zones.length > 2 && <span className="text-xs text-gray-400">+{promo.zones.length - 2}</span>}
+                        </div>
+                      ) : <span className="text-xs text-gray-400">Toutes zones</span>}
                     </TableCell>
                     <TableCell className="text-sm">
                       <span className="font-medium">{promo.usage_count || 0}</span>
@@ -773,7 +775,7 @@ export default function PromotionsPage() {
                     )}
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        {canWrite && <Button variant="outline" size="sm" onClick={() => handleEdit(promo)}><Edit className="w-4 h-4" /></Button>}
+                        {canWrite  && <Button variant="outline"     size="sm" onClick={() => handleEdit(promo)}><Edit  className="w-4 h-4" /></Button>}
                         {canDelete && <Button variant="destructive" size="sm" onClick={() => handleDelete(promo.id)}><Trash2 className="w-4 h-4" /></Button>}
                       </div>
                     </TableCell>
