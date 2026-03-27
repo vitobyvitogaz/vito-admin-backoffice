@@ -1,33 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Building2,
-  Plus,
-  Edit,
-  Trash2,
-  Search,
-  MapPin,
-  Phone,
-  Clock,
-  Download,
-  ChevronLeft,
-  ChevronRight,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
+  Building2, Plus, Edit, Trash2, Search, MapPin, Phone, Clock,
+  Download, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown,
+  ChevronDown, Check,
 } from "lucide-react";
 import Link from "next/link";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
@@ -40,9 +24,8 @@ import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 const PAGE_SIZE = 50;
 const VITOGAZ_GREEN = "#008B7F";
 
-// Icône bouteille de gaz custom
 const GasBottleIcon = ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+  <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
     <path d="M10 2h4" />
     <path d="M12 2v2" />
     <path d="M8 6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2z" />
@@ -52,7 +35,107 @@ const GasBottleIcon = ({ className, style }: { className?: string; style?: React
   </svg>
 );
 
-// SortKey sans null — inclut is_active
+// ── Combobox ville — single select avec recherche ─────────────────────────────
+interface CityComboboxProps {
+  value: string;
+  onChange: (value: string) => void;
+  zones: string[];
+  loading: boolean;
+}
+
+const CityCombobox: React.FC<CityComboboxProps> = ({ value, onChange, zones, loading }) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Fermer au clic extérieur
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        // Remettre le query sur la valeur sélectionnée si fermé sans sélection
+        setQuery(value);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [value]);
+
+  // Sync query avec value au montage / changement externe
+  useEffect(() => {
+    setQuery(value);
+  }, [value]);
+
+  const filtered = zones.filter((z) =>
+    z.toLowerCase().includes(query.toLowerCase())
+  );
+
+  const handleSelect = (zone: string) => {
+    onChange(zone);
+    setQuery(zone);
+    setOpen(false);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setQuery(e.target.value);
+    setOpen(true);
+    // Si l'utilisateur efface tout, reset la valeur
+    if (!e.target.value) onChange("");
+  };
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="relative">
+        <Input
+          ref={inputRef}
+          value={query}
+          onChange={handleInputChange}
+          onFocus={() => setOpen(true)}
+          placeholder={loading ? "Chargement des zones..." : "Rechercher une ville..."}
+          disabled={loading}
+          required
+          className="pr-8"
+        />
+        <ChevronDown
+          className={`absolute right-2.5 top-3 w-4 h-4 text-gray-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          strokeWidth={1.5}
+        />
+      </div>
+
+      {open && filtered.length > 0 && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+          {filtered.map((zone) => (
+            <button
+              key={zone}
+              type="button"
+              onMouseDown={(e) => {
+                // mousedown au lieu de click pour éviter le blur de l'input
+                e.preventDefault();
+                handleSelect(zone);
+              }}
+              className="w-full flex items-center justify-between px-3 py-2.5 text-sm text-left hover:bg-gray-50 transition-colors"
+            >
+              <span className={value === zone ? "font-medium" : ""}>{zone}</span>
+              {value === zone && (
+                <Check className="w-4 h-4 flex-shrink-0" style={{ color: VITOGAZ_GREEN }} />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {open && filtered.length === 0 && query && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
+          <p className="px-3 py-2.5 text-sm text-gray-400">Aucune zone trouvée pour "{query}"</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 type SortKey = "name" | "city" | "type" | "is_active";
 
 interface Product {
@@ -82,14 +165,22 @@ interface Reseller {
   reseller_products?: ResellerProduct[];
 }
 
+interface Zone {
+  id: string;
+  name: string;
+}
+
 export default function ResellersPage() {
-  // ── Permissions RBAC ─────────────────────────────────────────────────────
   const { canWrite, canDelete } = useCurrentUser();
 
   const [resellers, setResellers] = useState<Reseller[]>([]);
   const [filteredResellers, setFilteredResellers] = useState<Reseller[]>([]);
   const [sortedResellers, setSortedResellers] = useState<Reseller[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  // ── Zones pour le combobox ville ─────────────────────────────────────────
+  const [zones, setZones] = useState<string[]>([]);
+  const [loadingZones, setLoadingZones] = useState(true);
+
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -97,11 +188,8 @@ export default function ResellersPage() {
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  // Tri — SortKey | null pour le state
   const [sortColumn, setSortColumn] = useState<SortKey | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
-
-  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
 
   const [formData, setFormData] = useState({
@@ -119,6 +207,7 @@ export default function ResellersPage() {
   useEffect(() => {
     fetchResellers();
     fetchProducts();
+    fetchZones();
   }, []);
 
   useEffect(() => {
@@ -137,7 +226,6 @@ export default function ResellersPage() {
     setCurrentPage(1);
   }, [searchQuery, resellers]);
 
-  // Tri appliqué après filtre
   useEffect(() => {
     if (!sortColumn || !sortDirection) {
       setSortedResellers(filteredResellers);
@@ -161,7 +249,6 @@ export default function ResellersPage() {
     setCurrentPage(1);
   }, [filteredResellers, sortColumn, sortDirection]);
 
-  // Données de la page courante
   const totalPages = Math.ceil(sortedResellers.length / PAGE_SIZE);
   const paginatedResellers = sortedResellers.slice(
     (currentPage - 1) * PAGE_SIZE,
@@ -203,11 +290,7 @@ export default function ResellersPage() {
       setSortedResellers(data);
     } catch (error) {
       console.error("Erreur chargement revendeurs:", error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger les revendeurs",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: "Impossible de charger les revendeurs", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -219,11 +302,23 @@ export default function ResellersPage() {
       setProducts(data.filter((p) => p.is_active));
     } catch (error) {
       console.error("Erreur chargement produits:", error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de charger les produits",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: "Impossible de charger les produits", variant: "destructive" });
+    }
+  };
+
+  // ── Charger les zones depuis l'API ────────────────────────────────────────
+  const fetchZones = async () => {
+    setLoadingZones(true);
+    try {
+      const data = await apiGet<Zone[]>('/zones');
+      // Extraire les noms, trier alphabétiquement
+      const names = data.map((z) => z.name).sort((a, b) => a.localeCompare(b, 'fr'));
+      setZones(names);
+    } catch (error) {
+      console.error("Erreur chargement zones:", error);
+      // Fallback silencieux — le champ reste utilisable en saisie libre
+    } finally {
+      setLoadingZones(false);
     }
   };
 
@@ -242,21 +337,12 @@ export default function ResellersPage() {
     try {
       await apiPatch(`/resellers/${reseller.id}`, { is_active: !reseller.is_active });
       setResellers((prev) =>
-        prev.map((r) =>
-          r.id === reseller.id ? { ...r, is_active: !r.is_active } : r
-        )
+        prev.map((r) => r.id === reseller.id ? { ...r, is_active: !r.is_active } : r)
       );
-      toast({
-        title: "Succès !",
-        description: `Revendeur ${!reseller.is_active ? "activé" : "désactivé"}`,
-      });
+      toast({ title: "Succès !", description: `Revendeur ${!reseller.is_active ? "activé" : "désactivé"}` });
     } catch (error) {
       console.error("Erreur toggle:", error);
-      toast({
-        title: "Erreur",
-        description: "Impossible de modifier le statut",
-        variant: "destructive",
-      });
+      toast({ title: "Erreur", description: "Impossible de modifier le statut", variant: "destructive" });
     } finally {
       setTogglingId(null);
     }
@@ -264,44 +350,30 @@ export default function ResellersPage() {
 
   const handleExportCSV = () => {
     exportToCSV(sortedResellers, "revendeurs", {
-      name: "Nom",
-      city: "Ville",
-      address: "Adresse",
-      type: "Type",
-      phone: "Téléphone",
-      whatsapp: "WhatsApp",
-      latitude: "Latitude",
-      longitude: "Longitude",
-      is_active: "Actif",
+      name: "Nom", city: "Ville", address: "Adresse", type: "Type",
+      phone: "Téléphone", whatsapp: "WhatsApp", latitude: "Latitude",
+      longitude: "Longitude", is_active: "Actif",
     });
   };
 
   const getCategoryBadges = (reseller: Reseller) => {
     const items = (reseller.reseller_products || []).filter(rp => rp.products?.is_active);
     if (items.length === 0) return null;
-
     const categoryGroups: Record<string, number> = {};
     items.forEach((item) => {
       const category = item.products.category;
       categoryGroups[category] = (categoryGroups[category] || 0) + 1;
     });
-
     const categoryColors: Record<string, string> = {
       Bouteilles: "bg-teal-100 text-teal-700",
       Accessoires: "bg-green-100 text-green-700",
       Kit: "bg-purple-100 text-purple-700",
       "Gaz au détail": "bg-orange-100 text-orange-700",
     };
-
     return (
       <div className="flex flex-wrap gap-2 items-center">
         {Object.entries(categoryGroups).map(([category, count]) => (
-          <span
-            key={category}
-            className={`px-2 py-1 text-xs rounded-full ${
-              categoryColors[category] || "bg-gray-100 text-gray-700"
-            }`}
-          >
+          <span key={category} className={`px-2 py-1 text-xs rounded-full ${categoryColors[category] || "bg-gray-100 text-gray-700"}`}>
             {category} ({count})
           </span>
         ))}
@@ -371,9 +443,7 @@ export default function ResellersPage() {
 
   const toggleProduct = (productId: string) => {
     setSelectedProducts((prev) =>
-      prev.includes(productId)
-        ? prev.filter((id) => id !== productId)
-        : [...prev, productId]
+      prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]
     );
   };
 
@@ -387,7 +457,6 @@ export default function ResellersPage() {
     setSelectedProducts([]);
   };
 
-  // Colonnes triables avec leurs labels
   const sortableCols: { key: SortKey; label: string }[] = [
     { key: "name", label: "Nom" },
     { key: "city", label: "Ville" },
@@ -406,28 +475,16 @@ export default function ResellersPage() {
             <Building2 className="w-8 h-8" style={{ color: VITOGAZ_GREEN }} />
             <div>
               <h2 className="text-2xl font-bold">Revendeurs</h2>
-              <p className="text-sm text-gray-500">
-                {resellers.length} revendeur(s) au total
-              </p>
+              <p className="text-sm text-gray-500">{resellers.length} revendeur(s) au total</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={handleExportCSV}
-              disabled={sortedResellers.length === 0}
-              className="gap-2"
-            >
+            <Button variant="outline" onClick={handleExportCSV} disabled={sortedResellers.length === 0} className="gap-2">
               <Download className="w-4 h-4" />
               Exporter CSV
             </Button>
-            {/* Bouton Nouveau — ADMIN/SUPER_ADMIN uniquement */}
             {canDelete && (
-              <Button
-                onClick={() => setShowForm(!showForm)}
-                className="gap-2 text-white"
-                style={{ backgroundColor: VITOGAZ_GREEN }}
-              >
+              <Button onClick={() => setShowForm(!showForm)} className="gap-2 text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
                 <Plus className="w-4 h-4" />
                 {showForm ? "Annuler" : "Nouveau Revendeur"}
               </Button>
@@ -435,7 +492,7 @@ export default function ResellersPage() {
           </div>
         </div>
 
-        {/* Form — ADMIN/SUPER_ADMIN uniquement */}
+        {/* Form */}
         {showForm && (canDelete || (canWrite && !!editingId)) && (
           <Card className="mb-6">
             <CardHeader>
@@ -450,10 +507,30 @@ export default function ResellersPage() {
                       <Label htmlFor="name">Nom *</Label>
                       <Input id="name" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
                     </div>
+
+                    {/* ── Ville : combobox avec recherche dans les zones ── */}
                     <div>
-                      <Label htmlFor="city">Ville *</Label>
-                      <Input id="city" required value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} />
+                      <Label htmlFor="city">
+                        Ville *
+                        {formData.city && !zones.includes(formData.city) && zones.length > 0 && (
+                          <span className="ml-2 text-xs text-amber-500 font-normal">
+                            ⚠ Zone non reconnue
+                          </span>
+                        )}
+                      </Label>
+                      <CityCombobox
+                        value={formData.city}
+                        onChange={(val) => setFormData({ ...formData, city: val })}
+                        zones={zones}
+                        loading={loadingZones}
+                      />
+                      {zones.length > 0 && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          {zones.length} zones disponibles — tapez pour filtrer
+                        </p>
+                      )}
                     </div>
+
                     <div className="md:col-span-2">
                       <Label htmlFor="address">Adresse *</Label>
                       <Input id="address" required value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} />
@@ -508,9 +585,7 @@ export default function ResellersPage() {
                         key={product.id}
                         onClick={() => toggleProduct(product.id)}
                         className={`p-3 border rounded-lg cursor-pointer transition-all ${
-                          selectedProducts.includes(product.id)
-                            ? "bg-teal-50"
-                            : "border-gray-200 hover:border-gray-300"
+                          selectedProducts.includes(product.id) ? "bg-teal-50" : "border-gray-200 hover:border-gray-300"
                         }`}
                         style={selectedProducts.includes(product.id) ? { borderColor: VITOGAZ_GREEN } : {}}
                       >
@@ -557,16 +632,12 @@ export default function ResellersPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                {/* Colonnes triables : Nom, Ville, Type */}
                 {sortableCols.map((col) => {
                   const isActive = sortColumn === col.key;
                   return (
-                    <TableHead
-                      key={col.key}
-                      onClick={() => handleSort(col.key)}
+                    <TableHead key={col.key} onClick={() => handleSort(col.key)}
                       className="cursor-pointer select-none transition-colors hover:bg-gray-50"
-                      style={isActive ? { backgroundColor: "#f0faf9", color: VITOGAZ_GREEN } : {}}
-                    >
+                      style={isActive ? { backgroundColor: "#f0faf9", color: VITOGAZ_GREEN } : {}}>
                       <span className="flex items-center gap-1">
                         {col.label}
                         <SortIcon column={col.key} />
@@ -576,13 +647,10 @@ export default function ResellersPage() {
                 })}
                 <TableHead>Produits</TableHead>
                 <TableHead>Contact</TableHead>
-                {/* Colonne Actif — visible seulement si canWrite */}
                 {canWrite && (
-                  <TableHead
-                    onClick={() => handleSort("is_active")}
+                  <TableHead onClick={() => handleSort("is_active")}
                     className="cursor-pointer select-none transition-colors hover:bg-gray-50"
-                    style={sortColumn === "is_active" ? { backgroundColor: "#f0faf9", color: VITOGAZ_GREEN } : {}}
-                  >
+                    style={sortColumn === "is_active" ? { backgroundColor: "#f0faf9", color: VITOGAZ_GREEN } : {}}>
                     <span className="flex items-center gap-1">
                       Actif
                       <SortIcon column="is_active" />
@@ -617,9 +685,7 @@ export default function ResellersPage() {
                       </span>
                     </TableCell>
                     <TableCell>
-                      {getCategoryBadges(reseller) || (
-                        <span className="text-xs text-gray-400">Aucun produit</span>
-                      )}
+                      {getCategoryBadges(reseller) || <span className="text-xs text-gray-400">Aucun produit</span>}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1 text-sm">
@@ -627,16 +693,13 @@ export default function ResellersPage() {
                         {reseller.phone}
                       </div>
                     </TableCell>
-                    {/* Toggle is_active — EDITOR et ADMIN+ */}
                     {canWrite && (
                       <TableCell>
                         <button
                           onClick={() => handleToggleActive(reseller)}
                           disabled={togglingId === reseller.id}
                           title={reseller.is_active ? "Désactiver" : "Activer"}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                            togglingId === reseller.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
-                          }`}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${togglingId === reseller.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
                           style={{ backgroundColor: reseller.is_active ? VITOGAZ_GREEN : "#D1D5DB" }}
                         >
                           <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${reseller.is_active ? "translate-x-6" : "translate-x-1"}`} />
@@ -645,7 +708,6 @@ export default function ResellersPage() {
                     )}
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        {/* Lien horaires — EDITOR et ADMIN+ */}
                         {canWrite && (
                           <Link href={`/resellers/${reseller.id}`}>
                             <Button variant="outline" size="sm" title="Horaires et produits">
@@ -653,13 +715,11 @@ export default function ResellersPage() {
                             </Button>
                           </Link>
                         )}
-                        {/* Modifier — EDITOR et ADMIN+ */}
                         {canWrite && (
                           <Button variant="outline" size="sm" onClick={() => handleEdit(reseller)} title="Modifier">
                             <Edit className="w-4 h-4" />
                           </Button>
                         )}
-                        {/* Supprimer — ADMIN/SUPER_ADMIN uniquement */}
                         {canDelete && (
                           <Button variant="destructive" size="sm" onClick={() => handleDelete(reseller.id)} title="Supprimer">
                             <Trash2 className="w-4 h-4" />
@@ -673,7 +733,6 @@ export default function ResellersPage() {
             </TableBody>
           </Table>
 
-          {/* Pied de tableau : indicateur de tri + pagination */}
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 min-h-[52px]">
             <p className="text-xs text-gray-400 italic">{sortLabel() || ""}</p>
             {totalPages > 1 && (
@@ -686,18 +745,9 @@ export default function ResellersPage() {
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                    <Button
-                      key={page}
-                      size="sm"
-                      onClick={() => setCurrentPage(page)}
-                      className="w-8"
-                      style={
-                        page === currentPage
-                          ? { backgroundColor: VITOGAZ_GREEN, color: "white", borderColor: VITOGAZ_GREEN }
-                          : {}
-                      }
-                      variant={page === currentPage ? "default" : "outline"}
-                    >
+                    <Button key={page} size="sm" onClick={() => setCurrentPage(page)} className="w-8"
+                      style={page === currentPage ? { backgroundColor: VITOGAZ_GREEN, color: "white", borderColor: VITOGAZ_GREEN } : {}}
+                      variant={page === currentPage ? "default" : "outline"}>
                       {page}
                     </Button>
                   ))}
