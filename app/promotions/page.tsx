@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { createClient } from "@supabase/supabase-js"; // ← session Supabase pour upload
+import { getAuthToken } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -313,13 +313,8 @@ export default function PromotionsPage() {
     try {
       setUploading(true);
 
-      // Récupérer le token de session Supabase
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      // Récupérer le token JWT depuis le localStorage (même mécanisme que apiFetch)
+      const token = getAuthToken();
 
       if (!token) {
         toast({ title: "Erreur", description: "Session expirée, veuillez vous reconnecter", variant: "destructive" });
