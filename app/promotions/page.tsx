@@ -455,7 +455,7 @@ export default function PromotionsPage() {
       valid_until:          new Date(formData.valid_until + 'T23:59:59Z').toISOString(),
       image_url:            formData.image_url || null,
       product_category:     formData.product_category.length > 0
-        ? JSON.stringify(formData.product_category)
+        ? formData.product_category.join(',')
         : null,
       zones:                formData.zones,
       applicable_products:  formData.applicable_product_ids,
@@ -482,8 +482,14 @@ export default function PromotionsPage() {
         const raw = promo.product_category
         if (!raw) return [] as string[]
         if (Array.isArray(raw)) return raw as string[]
-        try { const parsed = JSON.parse(raw); return Array.isArray(parsed) ? parsed : [raw] }
-        catch { return [raw] as string[] }
+        // Essayer JSON d'abord (ancien format), puis CSV (nouveau format)
+        try {
+          const parsed = JSON.parse(raw)
+          return Array.isArray(parsed) ? parsed : [raw]
+        } catch {
+          // Format CSV : "Bouteilles,Accessoires"
+          return raw.split(',').map((s: string) => s.trim()).filter(Boolean) as string[]
+        }
       })(),
       zones: promo.zones || [], applicable_product_ids: promo.applicable_products || [],
       conditions: promo.conditions || [], max_usage: promo.max_usage?.toString() || "",
