@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react"; // ← useRef ajouté
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,21 +12,139 @@ import {
 import {
   Truck, Plus, Edit, Trash2, Search, CheckCircle, ThumbsUp,
   X, Image as ImageIcon, Download, ChevronLeft, ChevronRight,
-  ArrowUpDown, ArrowUp, ArrowDown, Calendar,
+  ArrowUpDown, ArrowUp, ArrowDown, Calendar, ChevronDown,
 } from "lucide-react";
 import { toast } from "@/lib/use-toast";
-import { apiPatch, apiPost, apiDelete } from "@/lib/api";
-import { ZoneSelector } from "@/components/ZoneSelector";
+import { apiGet, apiPatch, apiPost, apiDelete } from "@/lib/api"; // ← apiGet ajouté
 import { exportToCSV } from "@/lib/export-csv";
 import { Header } from "@/components/Header";
 import { Navigation } from "@/components/Navigation";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
+// ← ZoneSelector supprimé
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://vito-backend-supabase.onrender.com/api/v1';
 const PAGE_SIZE = 50;
 const VITOGAZ_GREEN = "#008B7F";
 
 type SortKey = "name" | "zones" | "rating" | "is_active";
+
+// ── ZonePills — multi-select avec recherche (même pattern que Promotions) ──────
+const ZonePills = ({
+  selectedZones,
+  onChange,
+}: {
+  selectedZones: string[]
+  onChange: (z: string[]) => void
+}) => {
+  const [zones, setZones] = useState<string[]>([])
+  const [query, setQuery] = useState("")
+  const [open, setOpen]   = useState(false)
+  const ref               = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    apiGet<{ id: string; name: string }[]>('/zones')
+      .then(d => setZones(d.map(z => z.name).sort((a, b) => a.localeCompare(b, 'fr'))))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", h)
+    return () => document.removeEventListener("mousedown", h)
+  }, [])
+
+  const filtered = zones.filter(
+    z => z.toLowerCase().includes(query.toLowerCase()) && !selectedZones.includes(z)
+  )
+
+  return (
+    <div ref={ref} className="space-y-2">
+      {/* Pills sélectionnées */}
+      <div className="flex flex-wrap gap-1.5 min-h-[32px]">
+        {selectedZones.map(z => (
+          <span
+            key={z}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-white"
+            style={{ backgroundColor: VITOGAZ_GREEN }}
+          >
+            {z}
+            <button
+              type="button"
+              onClick={() => onChange(selectedZones.filter(x => x !== z))}
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </span>
+        ))}
+        {selectedZones.length === 0 && (
+          <span className="text-xs text-gray-400 self-center">
+            Aucune zone sélectionnée
+          </span>
+        )}
+      </div>
+
+      {/* Input recherche + dropdown */}
+      <div className="relative">
+        <div
+          className="flex items-center gap-2 px-3 py-2 border border-input rounded-md bg-background cursor-text"
+          onClick={() => setOpen(true)}
+        >
+          <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+          <input
+            className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400"
+            placeholder="Rechercher et ajouter une zone..."
+            value={query}
+            onChange={e => { setQuery(e.target.value); setOpen(true) }}
+            onFocus={() => setOpen(true)}
+          />
+          <ChevronDown
+            className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`}
+            strokeWidth={1.5}
+          />
+        </div>
+
+        {open && (
+          <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="px-3 py-2.5 text-sm text-gray-400">
+                {query ? `Aucune zone pour "${query}"` : "Toutes les zones sont sélectionnées"}
+              </p>
+            ) : (
+              filtered.map(zone => (
+                <button
+                  key={zone}
+                  type="button"
+                  onMouseDown={e => {
+                    e.preventDefault()
+                    onChange([...selectedZones, zone])
+                    setQuery("")
+                  }}
+                  className="w-full flex items-center px-3 py-2 text-sm text-left hover:bg-gray-50 transition-colors"
+                >
+                  {zone}
+                </button>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
+      {selectedZones.length > 0 && (
+        <button
+          type="button"
+          onClick={() => onChange([])}
+          className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+        >
+          Tout effacer
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface DeliveryCompany {
   id: string;
@@ -56,15 +174,15 @@ interface DeliveryCompany {
 export default function DeliveryCompaniesPage() {
   const { canWrite, canDelete } = useCurrentUser();
 
-  const [companies, setCompanies]               = useState<DeliveryCompany[]>([]);
+  const [companies, setCompanies]                 = useState<DeliveryCompany[]>([]);
   const [filteredCompanies, setFilteredCompanies] = useState<DeliveryCompany[]>([]);
-  const [sortedCompanies, setSortedCompanies]   = useState<DeliveryCompany[]>([]);
-  const [loading, setLoading]                   = useState(true);
-  const [searchQuery, setSearchQuery]           = useState("");
-  const [showForm, setShowForm]                 = useState(false);
-  const [editingId, setEditingId]               = useState<string | null>(null);
-  const [uploading, setUploading]               = useState(false);
-  const [togglingId, setTogglingId]             = useState<string | null>(null);
+  const [sortedCompanies, setSortedCompanies]     = useState<DeliveryCompany[]>([]);
+  const [loading, setLoading]                     = useState(true);
+  const [searchQuery, setSearchQuery]             = useState("");
+  const [showForm, setShowForm]                   = useState(false);
+  const [editingId, setEditingId]                 = useState<string | null>(null);
+  const [uploading, setUploading]                 = useState(false);
+  const [togglingId, setTogglingId]               = useState<string | null>(null);
 
   const [sortColumn, setSortColumn]       = useState<SortKey | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
@@ -77,7 +195,7 @@ export default function DeliveryCompaniesPage() {
     min_order_amount: "", delivery_fee: "", working_hours: "",
     features: [] as string[], specialties: [] as string[],
     is_verified: false,
-    verified_at: "",       // ← nouvelle
+    verified_at: "",
     is_active: true,
     display_order: 0,
   });
@@ -117,7 +235,7 @@ export default function DeliveryCompaniesPage() {
     setCurrentPage(1);
   }, [filteredCompanies, sortColumn, sortDirection]);
 
-  const totalPages        = Math.ceil(sortedCompanies.length / PAGE_SIZE);
+  const totalPages         = Math.ceil(sortedCompanies.length / PAGE_SIZE);
   const paginatedCompanies = sortedCompanies.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const handleSort = (column: SortKey) => {
@@ -223,10 +341,9 @@ export default function DeliveryCompaniesPage() {
       features:         formData.features,
       specialties:      formData.specialties,
       is_verified:      formData.is_verified,
-      // ── verified_at : la date si fournie, sinon le backend gère automatiquement ──
       verified_at:      formData.verified_at
         ? new Date(formData.verified_at).toISOString()
-        : formData.is_verified ? undefined : null, // undefined = le backend décide
+        : formData.is_verified ? undefined : null,
       is_active:        formData.is_active,
       display_order:    Number(formData.display_order) || 0,
     };
@@ -245,7 +362,6 @@ export default function DeliveryCompaniesPage() {
   };
 
   const handleEdit = (company: DeliveryCompany) => {
-    // Convertir verified_at ISO → format date input (YYYY-MM-DD)
     const verifiedAtInput = company.verified_at
       ? new Date(company.verified_at).toISOString().split('T')[0]
       : "";
@@ -292,9 +408,8 @@ export default function DeliveryCompaniesPage() {
       setFeatureInput("");
     }
   };
-  const removeFeature = (f: string) => setFormData({ ...formData, features: formData.features.filter((x) => x !== f) });
-
-  const addSpecialty = () => {
+  const removeFeature   = (f: string) => setFormData({ ...formData, features:    formData.features.filter((x) => x !== f) });
+  const addSpecialty    = () => {
     if (specialtyInput.trim() && !formData.specialties.includes(specialtyInput.trim())) {
       setFormData({ ...formData, specialties: [...formData.specialties, specialtyInput.trim()] });
       setSpecialtyInput("");
@@ -312,7 +427,6 @@ export default function DeliveryCompaniesPage() {
     setFeatureInput(""); setSpecialtyInput(""); setEditingId(null); setShowForm(false);
   };
 
-  // ── Formater la date de vérification pour l'affichage ────────────────────
   const formatVerifiedDate = (dateStr: string | null): string | null => {
     if (!dateStr) return null;
     try {
@@ -415,10 +529,15 @@ export default function DeliveryCompaniesPage() {
                   </div>
                 </div>
 
-                {/* Zones */}
+                {/* ── Zones — ZonePills remplace ZoneSelector ── */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Zones de service *</h3>
-                  <ZoneSelector selectedZones={formData.service_areas} onChange={(zones) => setFormData({ ...formData, service_areas: zones })} label="" required placeholder="Sélectionner les zones desservies..." />
+                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">
+                    Zones de service *
+                  </h3>
+                  <ZonePills
+                    selectedZones={formData.service_areas}
+                    onChange={(zones) => setFormData({ ...formData, service_areas: zones })}
+                  />
                 </div>
 
                 {/* Caractéristiques */}
@@ -465,7 +584,6 @@ export default function DeliveryCompaniesPage() {
                       <Input id="display_order" type="number" value={formData.display_order} onChange={(e) => setFormData({ ...formData, display_order: parseInt(e.target.value) || 0 })} placeholder="0" />
                     </div>
 
-                    {/* ── Vérifié + date ── */}
                     <div className="lg:col-span-2 space-y-3">
                       <div className="flex items-center gap-2">
                         <input
@@ -477,7 +595,6 @@ export default function DeliveryCompaniesPage() {
                             setFormData({
                               ...formData,
                               is_verified: checked,
-                              // Auto-remplir avec aujourd'hui si on coche, effacer si on décoche
                               verified_at: checked
                                 ? (formData.verified_at || new Date().toISOString().split('T')[0])
                                 : "",
@@ -554,7 +671,6 @@ export default function DeliveryCompaniesPage() {
                 </TableHead>
                 <TableHead>Service</TableHead>
                 <TableHead>Statut</TableHead>
-                {/* ── Colonne Satisfaction — vrai rating basé sur feedbacks ── */}
                 <TableHead className="cursor-pointer select-none hover:bg-gray-50" onClick={() => handleSort("rating")} style={sortColumn === "rating" ? { backgroundColor: "#f0faf9", color: VITOGAZ_GREEN } : {}}>
                   <span className="flex items-center gap-1">Satisfaction<SortIcon column="rating" /></span>
                 </TableHead>
@@ -614,7 +730,6 @@ export default function DeliveryCompaniesPage() {
                         {company.delivery_fee && <div>💰 {company.delivery_fee}</div>}
                       </div>
                     </TableCell>
-                    {/* Statut : Vérifié + date */}
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         {company.is_verified && (
@@ -634,7 +749,6 @@ export default function DeliveryCompaniesPage() {
                         </span>
                       </div>
                     </TableCell>
-                    {/* Satisfaction — vrai rating basé sur feedbacks push */}
                     <TableCell>
                       {company.review_count > 0 ? (
                         <div className="flex flex-col gap-0.5">

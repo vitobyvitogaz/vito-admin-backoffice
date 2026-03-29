@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { createClient } from "@supabase/supabase-js"; // ← session Supabase pour upload
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -111,7 +112,6 @@ const ProductSelector = ({ selectedIds, onChange }: { selectedIds: string[]; onC
     p.category.toLowerCase().includes(query.toLowerCase())
   )
 
-  // Grouper par catégorie
   const grouped = filtered.reduce<Record<string, Product[]>>((acc, p) => {
     if (!acc[p.category]) acc[p.category] = []
     acc[p.category].push(p)
@@ -122,7 +122,6 @@ const ProductSelector = ({ selectedIds, onChange }: { selectedIds: string[]; onC
 
   return (
     <div className="space-y-3">
-      {/* Selected pills */}
       {selectedIds.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {selectedIds.map(id => {
@@ -140,14 +139,10 @@ const ProductSelector = ({ selectedIds, onChange }: { selectedIds: string[]; onC
           </button>
         </div>
       )}
-
-      {/* Recherche */}
       <div className="relative">
         <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-gray-400" />
         <Input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher un produit..." className="pl-9 h-9 text-sm" />
       </div>
-
-      {/* Liste groupée par catégorie */}
       <div className="border border-gray-200 rounded-lg overflow-hidden max-h-56 overflow-y-auto">
         {Object.entries(grouped).map(([category, items]) => (
           <div key={category}>
@@ -218,7 +213,7 @@ export default function PromotionsPage() {
     valid_from: "", valid_until: "",
     image_url: "", product_category: "",
     zones: [] as string[],
-    applicable_product_ids: [] as string[],  // IDs des vrais produits
+    applicable_product_ids: [] as string[],
     conditions: [] as string[],
     max_usage: "", is_active: true, is_featured: false, display_order: "0",
   });
@@ -293,7 +288,6 @@ export default function PromotionsPage() {
   const savePopupSettings = async () => {
     setSavingPopup(true);
     try {
-      // ── Endpoint correct : PATCH /settings/key/:key ──────────────────────
       await apiPatch('/settings/key/popup_settings', {
         setting_value: JSON.stringify(popupSettings),
       });
@@ -304,21 +298,58 @@ export default function PromotionsPage() {
     } finally { setSavingPopup(false); }
   };
 
+  // ── handleImageUpload — CORRIGÉ : ajout du token Supabase ──────────────────
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) { toast({ title: "Erreur", description: "Veuillez sélectionner une image", variant: "destructive" }); return; }
-    if (file.size > 5 * 1024 * 1024) { toast({ title: "Erreur", description: "5 MB maximum", variant: "destructive" }); return; }
+    if (!file.type.startsWith('image/')) {
+      toast({ title: "Erreur", description: "Veuillez sélectionner une image", variant: "destructive" });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Erreur", description: "5 MB maximum", variant: "destructive" });
+      return;
+    }
     try {
       setUploading(true);
-      const fd = new FormData(); fd.append('file', file);
-      const res = await fetch(`${API_URL}/promotions/upload-image`, { method: 'POST', body: fd });
-      if (!res.ok) throw new Error();
+
+      // Récupérer le token de session Supabase
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      if (!token) {
+        toast({ title: "Erreur", description: "Session expirée, veuillez vous reconnecter", variant: "destructive" });
+        return;
+      }
+
+      const fd = new FormData();
+      fd.append('file', file);
+
+      // Ne pas définir Content-Type manuellement — le browser le gère avec FormData
+      const res = await fetch(`${API_URL}/promotions/upload-image`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: fd,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `Erreur ${res.status}`);
+      }
+
       const data = await res.json();
       setFormData(p => ({ ...p, image_url: data.file_url }));
       toast({ title: "Succès !", description: "Image uploadée" });
-    } catch { toast({ title: "Erreur", description: "Erreur upload", variant: "destructive" }); }
-    finally { setUploading(false); }
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      toast({ title: "Erreur", description: error.message || "Erreur upload", variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleFeaturedChange = (checked: boolean) => {
@@ -343,7 +374,7 @@ export default function PromotionsPage() {
       image_url:            formData.image_url || null,
       product_category:     formData.product_category || null,
       zones:                formData.zones,
-      applicable_products:  formData.applicable_product_ids, // IDs → le backend mappe les noms
+      applicable_products:  formData.applicable_product_ids,
       conditions:           formData.conditions,
       max_usage:            formData.max_usage ? parseInt(formData.max_usage) : null,
       is_active:            formData.is_active,
@@ -546,7 +577,7 @@ export default function PromotionsPage() {
                         ) : (
                           <div className="flex items-center gap-2">
                             <Input type="file" accept="image/*" onChange={handleImageUpload} disabled={uploading} className="flex-1" />
-                            {uploading && <span className="text-sm text-gray-500">Upload...</span>}
+                            {uploading && <span className="text-sm text-gray-500">Upload en cours...</span>}
                           </div>
                         )}
                       </div>
