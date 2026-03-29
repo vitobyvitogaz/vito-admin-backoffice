@@ -115,9 +115,9 @@ const ProductSelector = ({
     onChange(selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id])
   }
 
-  // Filtrer par catégorie sélectionnée ET par recherche texte
+  // Filtrer par catégorie exacte (même source que ProductCategorySelect) + recherche texte
   const filtered = products.filter(p => {
-    const matchCat   = !categoryFilter || p.category.toLowerCase() === categoryFilter.toLowerCase()
+    const matchCat   = !categoryFilter || p.category === categoryFilter
     const matchQuery = !query || p.name.toLowerCase().includes(query.toLowerCase())
     return matchCat && matchQuery
   })
@@ -180,6 +180,40 @@ const ProductSelector = ({
         )}
       </div>
     </div>
+  )
+}
+
+// ── ProductCategorySelect — catégories dérivées des vrais produits ────────────
+const ProductCategorySelect = ({
+  value,
+  onChange,
+}: {
+  value:    string
+  onChange: (cat: string) => void
+}) => {
+  const [categories, setCategories] = useState<string[]>([])
+
+  useEffect(() => {
+    apiGet<Product[]>('/products')
+      .then(d => {
+        const unique = [...new Set(d.filter(p => p.is_active).map(p => p.category))]
+          .sort((a, b) => a.localeCompare(b, 'fr'))
+        setCategories(unique)
+      })
+      .catch(() => {})
+  }, [])
+
+  return (
+    <select
+      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1"
+      value={value}
+      onChange={e => onChange(e.target.value)}
+    >
+      <option value="">Toutes catégories</option>
+      {categories.map(cat => (
+        <option key={cat} value={cat}>{cat}</option>
+      ))}
+    </select>
   )
 }
 
@@ -677,26 +711,14 @@ export default function PromotionsPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label>Catégorie de produit</Label>
-                      <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1"
+                      <ProductCategorySelect
                         value={formData.product_category}
-                        onChange={e => {
-                          // Quand la catégorie change, vider les produits sélectionnés
-                          // pour éviter une incohérence (produits d'une autre catégorie)
-                          setFormData({
-                            ...formData,
-                            product_category: e.target.value,
-                            applicable_product_ids: [],
-                          })
-                        }}>
-                        <option value="">Toutes catégories</option>
-                        <option value="bouteille">Bouteilles</option>
-                        <option value="detendeur">Détendeurs</option>
-                        <option value="tuyau">Tuyaux</option>
-                        <option value="kit1">Kits Fatapera</option>
-                        <option value="kit2">Kits connectiques</option>
-                        <option value="kit3">Kits complets</option>
-                        <option value="accessoire">Accessoires</option>
-                      </select>
+                        onChange={cat => setFormData({
+                          ...formData,
+                          product_category: cat,
+                          applicable_product_ids: [],
+                        })}
+                      />
                     </div>
                     <div className="md:col-span-2">
                       <Label>Produits spécifiques <span className="text-xs font-normal text-gray-400">(optionnel — sélectionner dans la liste)</span></Label>
