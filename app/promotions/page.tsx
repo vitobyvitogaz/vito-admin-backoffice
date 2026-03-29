@@ -91,14 +91,82 @@ const ZonePills = ({ selectedZones, onChange }: { selectedZones: string[]; onCha
 // ── ProductSelector — sélection depuis la vraie BDD, filtré par catégorie ────
 interface Product { id: string; name: string; category: string; is_active: boolean }
 
+// ── ProductCategoryPills — multi-select catégories depuis la BDD ──────────────
+const ProductCategoryPills = ({
+  selectedCategories,
+  onChange,
+}: {
+  selectedCategories: string[]
+  onChange:           (cats: string[]) => void
+}) => {
+  const [categories, setCategories] = useState<string[]>([])
+
+  useEffect(() => {
+    apiGet<Product[]>('/products')
+      .then(d => {
+        const unique = [...new Set(d.filter(p => p.is_active).map(p => p.category))]
+          .sort((a, b) => a.localeCompare(b, 'fr'))
+        setCategories(unique)
+      })
+      .catch(() => {})
+  }, [])
+
+  const toggle = (cat: string) => {
+    onChange(
+      selectedCategories.includes(cat)
+        ? selectedCategories.filter(c => c !== cat)
+        : [...selectedCategories, cat]
+    )
+  }
+
+  return (
+    <div className="space-y-2 mt-1">
+      <div className="flex flex-wrap gap-2">
+        {categories.map(cat => {
+          const active = selectedCategories.includes(cat)
+          return (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => toggle(cat)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border-2 transition-all ${
+                active
+                  ? 'text-white border-transparent'
+                  : 'border-gray-200 text-gray-500 hover:border-gray-300 bg-white'
+              }`}
+              style={active ? { backgroundColor: VITOGAZ_GREEN, borderColor: VITOGAZ_GREEN } : {}}
+            >
+              {active && <Check className="w-3 h-3" />}
+              {cat}
+            </button>
+          )
+        })}
+      </div>
+      {selectedCategories.length > 0 && (
+        <button
+          type="button"
+          onClick={() => onChange([])}
+          className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+        >
+          Tout effacer
+        </button>
+      )}
+      {categories.length === 0 && (
+        <p className="text-xs text-gray-400">Chargement des catégories...</p>
+      )}
+    </div>
+  )
+}
+
+// ── ProductSelector — filtre sur plusieurs catégories ─────────────────────────
 const ProductSelector = ({
   selectedIds,
   onChange,
-  categoryFilter = "",
+  categoryFilters = [],
 }: {
-  selectedIds:     string[]
-  onChange:        (ids: string[]) => void
-  categoryFilter?: string
+  selectedIds:      string[]
+  onChange:         (ids: string[]) => void
+  categoryFilters?: string[]
 }) => {
   const [products, setProducts] = useState<Product[]>([])
   const [query, setQuery]       = useState("")
@@ -115,9 +183,9 @@ const ProductSelector = ({
     onChange(selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id])
   }
 
-  // Filtrer par catégorie exacte (même source que ProductCategorySelect) + recherche texte
+  // Filtre : si des catégories sont sélectionnées, n'afficher que leurs produits
   const filtered = products.filter(p => {
-    const matchCat   = !categoryFilter || p.category === categoryFilter
+    const matchCat   = categoryFilters.length === 0 || categoryFilters.includes(p.category)
     const matchQuery = !query || p.name.toLowerCase().includes(query.toLowerCase())
     return matchCat && matchQuery
   })
@@ -149,9 +217,9 @@ const ProductSelector = ({
           </button>
         </div>
       )}
-      {categoryFilter && (
+      {categoryFilters.length > 0 && (
         <p className="text-xs text-gray-400">
-          Filtrés par catégorie : <span className="font-medium text-gray-600 capitalize">{categoryFilter}</span>
+          Filtrés par : <span className="font-medium text-gray-600">{categoryFilters.join(', ')}</span>
         </p>
       )}
       <div className="relative">
@@ -175,45 +243,11 @@ const ProductSelector = ({
         ))}
         {Object.keys(grouped).length === 0 && (
           <p className="px-3 py-4 text-sm text-gray-400 text-center">
-            {categoryFilter ? `Aucun produit dans "${categoryFilter}"` : "Aucun produit trouvé"}
+            {categoryFilters.length > 0 ? `Aucun produit dans les catégories sélectionnées` : "Aucun produit trouvé"}
           </p>
         )}
       </div>
     </div>
-  )
-}
-
-// ── ProductCategorySelect — catégories dérivées des vrais produits ────────────
-const ProductCategorySelect = ({
-  value,
-  onChange,
-}: {
-  value:    string
-  onChange: (cat: string) => void
-}) => {
-  const [categories, setCategories] = useState<string[]>([])
-
-  useEffect(() => {
-    apiGet<Product[]>('/products')
-      .then(d => {
-        const unique = [...new Set(d.filter(p => p.is_active).map(p => p.category))]
-          .sort((a, b) => a.localeCompare(b, 'fr'))
-        setCategories(unique)
-      })
-      .catch(() => {})
-  }, [])
-
-  return (
-    <select
-      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1"
-      value={value}
-      onChange={e => onChange(e.target.value)}
-    >
-      <option value="">Toutes catégories</option>
-      {categories.map(cat => (
-        <option key={cat} value={cat}>{cat}</option>
-      ))}
-    </select>
   )
 }
 
@@ -264,7 +298,7 @@ export default function PromotionsPage() {
     title: "", subtitle: "", description: "", discount_value: "",
     discount_type: "percentage", promo_code: "",
     valid_from: "", valid_until: "",
-    image_url: "", product_category: "",
+    image_url: "", product_category: [] as string[],
     zones: [] as string[],
     applicable_product_ids: [] as string[],
     conditions: [] as string[],
@@ -420,7 +454,7 @@ export default function PromotionsPage() {
       valid_from:           formData.valid_from ? new Date(formData.valid_from + 'T00:00:00Z').toISOString() : undefined,
       valid_until:          new Date(formData.valid_until + 'T23:59:59Z').toISOString(),
       image_url:            formData.image_url || null,
-      product_category:     formData.product_category || null,
+      product_category:     formData.product_category.length > 0 ? formData.product_category : null,
       zones:                formData.zones,
       applicable_products:  formData.applicable_product_ids,
       conditions:           formData.conditions,
@@ -442,7 +476,9 @@ export default function PromotionsPage() {
       discount_value: promo.discount_value.toString(), discount_type: promo.discount_type,
       promo_code: promo.promo_code || "",
       valid_from: promo.valid_from.split("T")[0], valid_until: promo.valid_until.split("T")[0],
-      image_url: promo.image_url || "", product_category: promo.product_category || "",
+      image_url: promo.image_url || "", product_category: Array.isArray(promo.product_category)
+        ? promo.product_category
+        : promo.product_category ? [promo.product_category] : [],
       zones: promo.zones || [], applicable_product_ids: promo.applicable_products || [],
       conditions: promo.conditions || [], max_usage: promo.max_usage?.toString() || "",
       is_active: promo.is_active, is_featured: promo.is_featured, display_order: promo.display_order.toString(),
@@ -496,7 +532,7 @@ export default function PromotionsPage() {
   const resetForm = () => {
     setFormData({
       title: "", subtitle: "", description: "", discount_value: "", discount_type: "percentage",
-      promo_code: "", valid_from: "", valid_until: "", image_url: "", product_category: "",
+      promo_code: "", valid_from: "", valid_until: "", image_url: "", product_category: [] as string[],
       zones: [], applicable_product_ids: [], conditions: [], max_usage: "",
       is_active: true, is_featured: false, display_order: "0",
     });
@@ -708,25 +744,25 @@ export default function PromotionsPage() {
                 {/* 5. Produits */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold border-b pb-2">5. Produits applicables</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4">
                     <div>
-                      <Label>Catégorie de produit</Label>
-                      <ProductCategorySelect
-                        value={formData.product_category}
-                        onChange={cat => setFormData({
+                      <Label>Catégories de produits <span className="text-xs font-normal text-gray-400">(sélection multiple)</span></Label>
+                      <ProductCategoryPills
+                        selectedCategories={formData.product_category}
+                        onChange={cats => setFormData({
                           ...formData,
-                          product_category: cat,
+                          product_category: cats,
                           applicable_product_ids: [],
                         })}
                       />
                     </div>
-                    <div className="md:col-span-2">
-                      <Label>Produits spécifiques <span className="text-xs font-normal text-gray-400">(optionnel — sélectionner dans la liste)</span></Label>
+                    <div>
+                      <Label>Produits spécifiques <span className="text-xs font-normal text-gray-400">(optionnel — filtrés par catégories ci-dessus)</span></Label>
                       <div className="mt-2">
                         <ProductSelector
                           selectedIds={formData.applicable_product_ids}
                           onChange={ids => setFormData({...formData, applicable_product_ids: ids})}
-                          categoryFilter={formData.product_category}
+                          categoryFilters={formData.product_category}
                         />
                       </div>
                     </div>
