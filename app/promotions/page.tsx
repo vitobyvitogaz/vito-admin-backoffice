@@ -454,7 +454,9 @@ export default function PromotionsPage() {
       valid_from:           formData.valid_from ? new Date(formData.valid_from + 'T00:00:00Z').toISOString() : undefined,
       valid_until:          new Date(formData.valid_until + 'T23:59:59Z').toISOString(),
       image_url:            formData.image_url || null,
-      product_category:     formData.product_category.length > 0 ? formData.product_category : null,
+      product_category:     formData.product_category.length > 0
+        ? JSON.stringify(formData.product_category)
+        : null,
       zones:                formData.zones,
       applicable_products:  formData.applicable_product_ids,
       conditions:           formData.conditions,
@@ -476,9 +478,13 @@ export default function PromotionsPage() {
       discount_value: promo.discount_value.toString(), discount_type: promo.discount_type,
       promo_code: promo.promo_code || "",
       valid_from: promo.valid_from.split("T")[0], valid_until: promo.valid_until.split("T")[0],
-      image_url: promo.image_url || "", product_category: Array.isArray(promo.product_category)
-        ? promo.product_category
-        : promo.product_category ? [promo.product_category] : [],
+      image_url: promo.image_url || "", product_category: (() => {
+        const raw = promo.product_category
+        if (!raw) return [] as string[]
+        if (Array.isArray(raw)) return raw as string[]
+        try { const parsed = JSON.parse(raw); return Array.isArray(parsed) ? parsed : [raw] }
+        catch { return [raw] as string[] }
+      })(),
       zones: promo.zones || [], applicable_product_ids: promo.applicable_products || [],
       conditions: promo.conditions || [], max_usage: promo.max_usage?.toString() || "",
       is_active: promo.is_active, is_featured: promo.is_featured, display_order: promo.display_order.toString(),
@@ -752,7 +758,7 @@ export default function PromotionsPage() {
                         onChange={cats => setFormData({
                           ...formData,
                           product_category: cats,
-                          applicable_product_ids: [],
+                          // Ne pas vider les produits sélectionnés — l'utilisateur gère manuellement
                         })}
                       />
                     </div>
