@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table";
 import {
   Tag, Plus, Edit, Trash2, Search, Percent, X, Image as ImageIcon,
-  ArrowUpDown, ArrowUp, ArrowDown, Settings, Star, Check, ChevronDown,
+  ArrowUpDown, ArrowUp, ArrowDown, Settings, Star, Check, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { toast } from "@/lib/use-toast";
@@ -88,13 +88,21 @@ const ZonePills = ({ selectedZones, onChange }: { selectedZones: string[]; onCha
   )
 }
 
-// ── ProductSelector — sélection depuis la vraie BDD ──────────────────────────
+// ── ProductSelector — sélection depuis la vraie BDD, filtré par catégorie ────
 interface Product { id: string; name: string; category: string; is_active: boolean }
 
-const ProductSelector = ({ selectedIds, onChange }: { selectedIds: string[]; onChange: (ids: string[]) => void }) => {
-  const [products, setProducts]   = useState<Product[]>([])
-  const [query, setQuery]         = useState("")
-  const [loading, setLoading]     = useState(true)
+const ProductSelector = ({
+  selectedIds,
+  onChange,
+  categoryFilter = "",
+}: {
+  selectedIds:     string[]
+  onChange:        (ids: string[]) => void
+  categoryFilter?: string
+}) => {
+  const [products, setProducts] = useState<Product[]>([])
+  const [query, setQuery]       = useState("")
+  const [loading, setLoading]   = useState(true)
 
   useEffect(() => {
     apiGet<Product[]>('/products')
@@ -107,10 +115,12 @@ const ProductSelector = ({ selectedIds, onChange }: { selectedIds: string[]; onC
     onChange(selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id])
   }
 
-  const filtered = products.filter(p =>
-    p.name.toLowerCase().includes(query.toLowerCase()) ||
-    p.category.toLowerCase().includes(query.toLowerCase())
-  )
+  // Filtrer par catégorie sélectionnée ET par recherche texte
+  const filtered = products.filter(p => {
+    const matchCat   = !categoryFilter || p.category.toLowerCase() === categoryFilter.toLowerCase()
+    const matchQuery = !query || p.name.toLowerCase().includes(query.toLowerCase())
+    return matchCat && matchQuery
+  })
 
   const grouped = filtered.reduce<Record<string, Product[]>>((acc, p) => {
     if (!acc[p.category]) acc[p.category] = []
@@ -139,6 +149,11 @@ const ProductSelector = ({ selectedIds, onChange }: { selectedIds: string[]; onC
           </button>
         </div>
       )}
+      {categoryFilter && (
+        <p className="text-xs text-gray-400">
+          Filtrés par catégorie : <span className="font-medium text-gray-600 capitalize">{categoryFilter}</span>
+        </p>
+      )}
       <div className="relative">
         <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-gray-400" />
         <Input value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher un produit..." className="pl-9 h-9 text-sm" />
@@ -159,7 +174,9 @@ const ProductSelector = ({ selectedIds, onChange }: { selectedIds: string[]; onC
           </div>
         ))}
         {Object.keys(grouped).length === 0 && (
-          <p className="px-3 py-4 text-sm text-gray-400 text-center">Aucun produit trouvé</p>
+          <p className="px-3 py-4 text-sm text-gray-400 text-center">
+            {categoryFilter ? `Aucun produit dans "${categoryFilter}"` : "Aucun produit trouvé"}
+          </p>
         )}
       </div>
     </div>
@@ -198,6 +215,8 @@ export default function PromotionsPage() {
   const [editingId, setEditingId]             = useState<string | null>(null);
   const [uploading, setUploading]             = useState(false);
   const [togglingId, setTogglingId]           = useState<string | null>(null);
+  const [reorderingId, setReorderingId]       = useState<string | null>(null);
+  const formRef                               = useRef<HTMLDivElement>(null);
   const [showPopupConfig, setShowPopupConfig] = useState(false);
   const [popupSettings, setPopupSettings]     = useState<PopupSettings>({
     cooldown_hours: 48, delay_seconds: 3, allowed_pages: ['home'], auto_close_seconds: 30, enabled: true,
@@ -395,6 +414,32 @@ export default function PromotionsPage() {
       is_active: promo.is_active, is_featured: promo.is_featured, display_order: promo.display_order.toString(),
     });
     setEditingId(promo.id); setShowForm(true);
+    // ── Scroll vers le formulaire ──────────────────────────────────────────
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 50)
+  };
+
+  // ── Réordonner via boutons ↑↓ sur la table ────────────────────────────────
+  const handleReorder = async (promo: Promotion, direction: 'up' | 'down') => {
+    const list = [...sortedPromotions]
+    const idx  = list.findIndex(p => p.id === promo.id)
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (swapIdx < 0 || swapIdx >= list.length) return
+
+    const other = list[swapIdx]
+    setReorderingId(promo.id)
+    try {
+      await Promise.all([
+        apiPatch(`/promotions/${promo.id}`, { display_order: other.display_order }),
+        apiPatch(`/promotions/${other.id}`, { display_order: promo.display_order }),
+      ])
+      await fetchPromotions()
+    } catch {
+      toast({ title: "Erreur", description: "Impossible de réordonner", variant: "destructive" })
+    } finally {
+      setReorderingId(null)
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -437,7 +482,7 @@ export default function PromotionsPage() {
       : [...s.allowed_pages, page],
   }));
 
-  const colSpan = 8 + (canWrite ? 1 : 0);
+  const colSpan = 9 + (canWrite ? 2 : 0);
 
   const sortableCols: { key: SortKey; label: string }[] = [
     { key: "title", label: "Titre" }, { key: "discount", label: "Réduction" },
@@ -534,7 +579,7 @@ export default function PromotionsPage() {
 
         {/* Form */}
         {showForm && (canDelete || (canWrite && !!editingId)) && (
-          <Card className="mb-6">
+          <Card className="mb-6" ref={formRef}>
             <CardHeader>
               <CardTitle>{editingId ? "Modifier la Promotion" : "Nouvelle Promotion"}</CardTitle>
             </CardHeader>
@@ -633,7 +678,16 @@ export default function PromotionsPage() {
                     <div>
                       <Label>Catégorie de produit</Label>
                       <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1"
-                        value={formData.product_category} onChange={e => setFormData({...formData, product_category: e.target.value})}>
+                        value={formData.product_category}
+                        onChange={e => {
+                          // Quand la catégorie change, vider les produits sélectionnés
+                          // pour éviter une incohérence (produits d'une autre catégorie)
+                          setFormData({
+                            ...formData,
+                            product_category: e.target.value,
+                            applicable_product_ids: [],
+                          })
+                        }}>
                         <option value="">Toutes catégories</option>
                         <option value="bouteille">Bouteilles</option>
                         <option value="detendeur">Détendeurs</option>
@@ -647,7 +701,11 @@ export default function PromotionsPage() {
                     <div className="md:col-span-2">
                       <Label>Produits spécifiques <span className="text-xs font-normal text-gray-400">(optionnel — sélectionner dans la liste)</span></Label>
                       <div className="mt-2">
-                        <ProductSelector selectedIds={formData.applicable_product_ids} onChange={ids => setFormData({...formData, applicable_product_ids: ids})} />
+                        <ProductSelector
+                          selectedIds={formData.applicable_product_ids}
+                          onChange={ids => setFormData({...formData, applicable_product_ids: ids})}
+                          categoryFilter={formData.product_category}
+                        />
                       </div>
                     </div>
                   </div>
@@ -656,19 +714,22 @@ export default function PromotionsPage() {
                 {/* 6. Conditions */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold border-b pb-2">6. Conditions</h3>
+                  {/* Pills au-dessus du champ */}
+                  {formData.conditions.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {formData.conditions.map((c, i) => (
+                        <span key={i} className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm">
+                          {c}<button type="button" onClick={() => setFormData(p => ({...p, conditions: p.conditions.filter(x => x !== c)}))}>×</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <Input value={newCondition} onChange={e => setNewCondition(e.target.value)} placeholder="Ex: Minimum 2 bouteilles"
                       onKeyPress={e => { if (e.key === 'Enter') { e.preventDefault(); if (newCondition.trim()) { setFormData(p => ({...p, conditions: [...p.conditions, newCondition.trim()]})); setNewCondition(""); } } }} />
                     <Button type="button" variant="outline" onClick={() => { if (newCondition.trim()) { setFormData(p => ({...p, conditions: [...p.conditions, newCondition.trim()]})); setNewCondition(""); } }}>
                       <Plus className="w-4 h-4" />
                     </Button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {formData.conditions.map((c, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm">
-                        {c}<button type="button" onClick={() => setFormData(p => ({...p, conditions: p.conditions.filter(x => x !== c)}))}>×</button>
-                      </span>
-                    ))}
                   </div>
                 </div>
 
@@ -680,11 +741,7 @@ export default function PromotionsPage() {
                       <Label>Nombre max d'utilisations</Label>
                       <Input type="number" min="0" className="mt-1" value={formData.max_usage} onChange={e => setFormData({...formData, max_usage: e.target.value})} placeholder="Vide = illimité" />
                     </div>
-                    <div>
-                      <Label>Ordre d'affichage</Label>
-                      <Input type="number" min="0" className="mt-1" value={formData.display_order} onChange={e => setFormData({...formData, display_order: e.target.value})} />
-                    </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 md:col-span-2">
                       <input type="checkbox" id="is_active" checked={formData.is_active} onChange={e => setFormData({...formData, is_active: e.target.checked})} className="w-4 h-4" />
                       <Label htmlFor="is_active" className="cursor-pointer">Promotion active</Label>
                     </div>
@@ -736,6 +793,7 @@ export default function PromotionsPage() {
                   );
                 })}
                 <TableHead>Code</TableHead>
+                {canWrite && <TableHead className="w-20">Ordre</TableHead>}
                 {canWrite && <TableHead>Activer</TableHead>}
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -790,6 +848,28 @@ export default function PromotionsPage() {
                         ? <code className="px-2 py-1 bg-gray-100 rounded text-xs font-mono">{promo.promo_code}</code>
                         : <span className="text-gray-400 text-xs">-</span>}
                     </TableCell>
+                    {canWrite && (
+                      <TableCell>
+                        <div className="flex flex-col gap-0.5">
+                          <button
+                            onClick={() => handleReorder(promo, 'up')}
+                            disabled={reorderingId === promo.id || sortedPromotions[0]?.id === promo.id}
+                            className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            title="Monter"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5 text-gray-500" />
+                          </button>
+                          <button
+                            onClick={() => handleReorder(promo, 'down')}
+                            disabled={reorderingId === promo.id || sortedPromotions[sortedPromotions.length - 1]?.id === promo.id}
+                            className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            title="Descendre"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
+                          </button>
+                        </div>
+                      </TableCell>
+                    )}
                     {canWrite && (
                       <TableCell>
                         <button onClick={() => handleToggleActive(promo)} disabled={togglingId === promo.id}
