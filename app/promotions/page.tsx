@@ -265,6 +265,7 @@ interface Promotion {
 interface PopupSettings {
   cooldown_hours: number; delay_seconds: number;
   allowed_pages: string[]; auto_close_seconds: number; enabled: boolean;
+  popup_strategy: string; popup_fixed_promo_id: string;
 }
 
 const PAGE_LABELS: Record<string, string> = {
@@ -287,6 +288,7 @@ export default function PromotionsPage() {
   const [showPopupConfig, setShowPopupConfig] = useState(false);
   const [popupSettings, setPopupSettings]     = useState<PopupSettings>({
     cooldown_hours: 48, delay_seconds: 3, allowed_pages: ['home'], auto_close_seconds: 30, enabled: true,
+    popup_strategy: 'featured', popup_fixed_promo_id: '',
   });
   const [savingPopup, setSavingPopup]         = useState(false);
 
@@ -642,6 +644,55 @@ export default function PromotionsPage() {
                       </button>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* ── Stratégie de sélection de la promo ── */}
+              <div className="border-t border-gray-100 pt-4">
+                <Label className="text-sm font-semibold">Stratégie d'affichage</Label>
+                <p className="text-xs text-gray-400 mb-3 mt-0.5">Quelle promotion afficher dans le popup ?</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label>Méthode de sélection</Label>
+                    <select
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1"
+                      value={popupSettings.popup_strategy}
+                      onChange={e => setPopupSettings(s => ({ ...s, popup_strategy: e.target.value, popup_fixed_promo_id: '' }))}
+                    >
+                      <option value="featured">⭐ Promo du moment (is_featured)</option>
+                      <option value="random">🎲 Aléatoire à chaque ouverture</option>
+                      <option value="fixed">📌 Promo fixe (choisie manuellement)</option>
+                      <option value="order_asc">↑ Ordre croissant (display_order min)</option>
+                      <option value="order_desc">↓ Ordre décroissant (display_order max)</option>
+                      <option value="latest">🆕 La plus récente (valid_from)</option>
+                    </select>
+                  </div>
+
+                  {/* Sélecteur de promo fixe — visible uniquement si stratégie = fixed */}
+                  {popupSettings.popup_strategy === 'fixed' && (
+                    <div>
+                      <Label>Promotion à afficher</Label>
+                      <select
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1"
+                        value={popupSettings.popup_fixed_promo_id}
+                        onChange={e => setPopupSettings(s => ({ ...s, popup_fixed_promo_id: e.target.value }))}
+                      >
+                        <option value="">— Choisir une promotion —</option>
+                        {promotions
+                          .filter(p => p.is_active)
+                          .sort((a, b) => a.display_order - b.display_order)
+                          .map(p => (
+                            <option key={p.id} value={p.id}>
+                              {p.is_featured ? '⭐ ' : ''}{p.title}
+                            </option>
+                          ))
+                        }
+                      </select>
+                      {!popupSettings.popup_fixed_promo_id && (
+                        <p className="text-xs text-amber-500 mt-1">⚠ Sélectionnez une promotion</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               <Button onClick={savePopupSettings} disabled={savingPopup} className="text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
