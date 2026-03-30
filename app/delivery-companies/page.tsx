@@ -274,9 +274,19 @@ export default function DeliveryCompaniesPage() {
   const saveFeedbackSettings = async () => {
     setSavingFeedback(true)
     try {
-      await apiPatch('/settings/key/feedback_settings', {
-        setting_value: JSON.stringify(feedbackSettings),
-      })
+      // Tenter un PATCH d'abord — si la clé n'existe pas encore, créer via POST
+      try {
+        await apiPatch('/settings/key/feedback_settings', {
+          setting_value: JSON.stringify(feedbackSettings),
+        })
+      } catch {
+        // Clé inexistante → créer
+        await apiPost('/settings', {
+          key:           'feedback_settings',
+          setting_value: JSON.stringify(feedbackSettings),
+          is_public:     false,
+        })
+      }
       toast({ title: "Succès !", description: "Configuration feedback sauvegardée" })
       setShowFeedbackConfig(false)
     } catch {
