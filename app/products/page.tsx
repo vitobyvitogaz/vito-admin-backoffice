@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -77,6 +77,7 @@ export default function ProductsPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const formRef = useRef<HTMLDivElement>(null);
 
   // Tri
   const [sortColumn, setSortColumn] = useState<SortKey | null>(null);
@@ -338,6 +339,9 @@ export default function ProductsPage() {
     setImagePreview(product.image_url || "");
     setEditingId(product.id);
     setShowForm(true);
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 50)
   };
 
   const handleDelete = async (id: string) => {
@@ -425,7 +429,7 @@ export default function ProductsPage() {
 
         {/* Form */}
         {showForm && (
-          <Card className="mb-6">
+          <Card className="mb-6" ref={formRef}>
             <CardHeader>
               <CardTitle>
                 {editingId ? "Modifier le Produit" : "Nouveau Produit"}
@@ -611,6 +615,7 @@ export default function ProductsPage() {
                   );
                 })}
                 <TableHead>Vedette</TableHead>
+                <TableHead className="w-12 text-center">#</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -686,6 +691,11 @@ export default function ProductsPage() {
                       ) : (
                         <span className="text-gray-400 text-xs">-</span>
                       )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span className="text-xs font-semibold text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">
+                        {product.order_position}
+                      </span>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
