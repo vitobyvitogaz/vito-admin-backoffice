@@ -33,7 +33,6 @@ import { uploadProductImage } from "@/lib/supabase";
 import { exportToCSV } from "@/lib/export-csv";
 import { Header } from "@/components/Header";
 import { Navigation } from "@/components/Navigation";
-import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 
 const PAGE_SIZE = 50;
 const VITOGAZ_GREEN = "#008B7F";
@@ -67,9 +66,6 @@ interface Product {
 }
 
 export default function ProductsPage() {
-  // ── Permissions RBAC ─────────────────────────────────────────────────────
-  const { canWrite, canDelete } = useCurrentUser();
-
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [sortedProducts, setSortedProducts] = useState<Product[]>([]);
@@ -225,7 +221,6 @@ export default function ProductsPage() {
 
   // Toggle is_active directement dans le tableau
   const handleToggleActive = async (product: Product) => {
-    if (!canWrite) return;
     setTogglingId(product.id);
     try {
       await apiPatch(`/products/${product.id}`, { is_active: !product.is_active });
@@ -270,6 +265,21 @@ export default function ProductsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // ── Validation : bloquer si la position est déjà prise ─────────────────
+    const positionValue = parseInt(formData.order_position) || 0
+    const conflict = products.find(p =>
+      p.order_position === positionValue && p.id !== editingId
+    )
+    if (conflict) {
+      toast({
+        title: "Position déjà utilisée",
+        description: `"${conflict.name}" utilise déjà la position ${positionValue}. Choisissez une autre position.`,
+        variant: "destructive",
+      })
+      return
+    }
+
     setUploading(true);
 
     try {
@@ -365,18 +375,18 @@ export default function ProductsPage() {
     setShowForm(false);
   };
 
-  // Colonnes triables — colonne Actif exclue si VIEWER
+  // Colonnes triables
   const sortableCols: { key: SortKey; label: string }[] = [
     { key: "product_code", label: "Code" },
     { key: "name", label: "Nom" },
     { key: "category", label: "Catégorie" },
     { key: "price", label: "Prix" },
-    ...(canWrite ? [{ key: "is_active" as SortKey, label: "Actif" }] : []),
+    { key: "is_active", label: "Actif" },
   ];
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header title="VIto Admin" subtitle="GESTION DES PRODUITS" />
+      <Header title="VIto Admin" subtitle="Gestion des Produits" />
       <Navigation />
 
       {/* Main Content */}
@@ -402,22 +412,19 @@ export default function ProductsPage() {
               <Download className="w-4 h-4" />
               Exporter CSV
             </Button>
-            {/* Bouton Nouveau — ADMIN/SUPER_ADMIN uniquement */}
-            {canDelete && (
-              <Button
-                onClick={() => setShowForm(!showForm)}
-                className="gap-2 text-white"
-                style={{ backgroundColor: VITOGAZ_GREEN }}
-              >
-                <Plus className="w-4 h-4" />
-                {showForm ? "Annuler" : "Nouveau Produit"}
-              </Button>
-            )}
+            <Button
+              onClick={() => setShowForm(!showForm)}
+              className="gap-2 text-white"
+              style={{ backgroundColor: VITOGAZ_GREEN }}
+            >
+              <Plus className="w-4 h-4" />
+              {showForm ? "Annuler" : "Nouveau Produit"}
+            </Button>
           </div>
         </div>
 
-        {/* Form — ADMIN/SUPER_ADMIN uniquement */}
-        {showForm && (canDelete || (canWrite && !!editingId)) && (
+        {/* Form */}
+        {showForm && (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle>
@@ -506,13 +513,27 @@ export default function ProductsPage() {
                   </div>
 
                   <div>
-                    <Label htmlFor="order_position">Position d'affichage</Label>
+                    <Label htmlFor="order_position">Position d'affichage *</Label>
                     <Input
                       id="order_position"
                       type="number"
+                      required
                       value={formData.order_position}
                       onChange={(e) => setFormData({ ...formData, order_position: e.target.value })}
+                      placeholder="Ex: 1"
                     />
+                    {/* Hint : positions déjà prises par d'autres produits */}
+                    {products.filter(p => p.id !== editingId).length > 0 && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        Déjà utilisées :{' '}
+                        {products
+                          .filter(p => p.id !== editingId)
+                          .map(p => p.order_position)
+                          .sort((a, b) => a - b)
+                          .join(', ')
+                        }
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-6 pt-6">
                     <label className="flex items-center gap-2">
@@ -596,13 +617,13 @@ export default function ProductsPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={canWrite ? 7 : 6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     Chargement...
                   </TableCell>
                 </TableRow>
               ) : paginatedProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canWrite ? 7 : 6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     Aucun produit trouvé
                   </TableCell>
                 </TableRow>
@@ -639,26 +660,24 @@ export default function ProductsPage() {
                         <span className="text-gray-400">-</span>
                       )}
                     </TableCell>
-                    {/* Toggle is_active — EDITOR et ADMIN+ */}
-                    {canWrite && (
-                      <TableCell>
-                        <button
-                          onClick={() => handleToggleActive(product)}
-                          disabled={togglingId === product.id}
-                          title={product.is_active ? "Désactiver" : "Activer"}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                            togglingId === product.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                    {/* Toggle is_active */}
+                    <TableCell>
+                      <button
+                        onClick={() => handleToggleActive(product)}
+                        disabled={togglingId === product.id}
+                        title={product.is_active ? "Désactiver" : "Activer"}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                          togglingId === product.id ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                        }`}
+                        style={{ backgroundColor: product.is_active ? VITOGAZ_GREEN : "#D1D5DB" }}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            product.is_active ? "translate-x-6" : "translate-x-1"
                           }`}
-                          style={{ backgroundColor: product.is_active ? VITOGAZ_GREEN : "#D1D5DB" }}
-                        >
-                          <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                              product.is_active ? "translate-x-6" : "translate-x-1"
-                            }`}
-                          />
-                        </button>
-                      </TableCell>
-                    )}
+                        />
+                      </button>
+                    </TableCell>
                     <TableCell>
                       {product.is_featured ? (
                         <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">
@@ -670,26 +689,20 @@ export default function ProductsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        {/* Modifier — EDITOR et ADMIN+ */}
-                        {canWrite && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEdit(product)}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                        )}
-                        {/* Supprimer — ADMIN/SUPER_ADMIN uniquement */}
-                        {canDelete && (
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleDelete(product.id)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEdit(product)}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDelete(product.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
