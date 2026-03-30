@@ -280,11 +280,13 @@ export default function DeliveryCompaniesPage() {
           setting_value: JSON.stringify(feedbackSettings),
         })
       } catch {
-        // Clé inexistante → créer
+        // Clé inexistante → créer avec les bons noms de colonnes (app_settings)
         await apiPost('/settings', {
-          key:           'feedback_settings',
+          setting_key:   'feedback_settings',
           setting_value: JSON.stringify(feedbackSettings),
-          is_public:     false,
+          setting_type:  'json',
+          description:   'Configuration du délai de feedback livraison',
+          is_active:     true,
         })
       }
       toast({ title: "Succès !", description: "Configuration feedback sauvegardée" })
