@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table";
 import {
   Tag, Plus, Edit, Trash2, Search, Percent, X, Image as ImageIcon,
-  ArrowUpDown, ArrowUp, ArrowDown, Settings, Star, Check, ChevronDown, ChevronUp,
+  ArrowUpDown, ArrowUp, ArrowDown, Settings, Star, Check, ChevronDown,
 } from "lucide-react";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { toast } from "@/lib/use-toast";
@@ -283,7 +283,6 @@ export default function PromotionsPage() {
   const [editingId, setEditingId]             = useState<string | null>(null);
   const [uploading, setUploading]             = useState(false);
   const [togglingId, setTogglingId]           = useState<string | null>(null);
-  const [reorderingId, setReorderingId]       = useState<string | null>(null);
   const formRef                               = useRef<HTMLDivElement>(null);
   const [showPopupConfig, setShowPopupConfig] = useState(false);
   const [popupSettings, setPopupSettings]     = useState<PopupSettings>({
@@ -444,6 +443,21 @@ export default function PromotionsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // ── Validation : bloquer si le numéro d'ordre est déjà pris ────────────
+    const orderValue = parseInt(formData.display_order) || 0
+    const conflict = promotions.find(p =>
+      p.display_order === orderValue && p.id !== editingId
+    )
+    if (conflict) {
+      toast({
+        title: "Numéro d'ordre déjà utilisé",
+        description: `"${conflict.title}" utilise déjà le numéro ${orderValue}. Choisissez un autre numéro.`,
+        variant: "destructive",
+      })
+      return
+    }
+
     const payload = {
       title:                formData.title,
       subtitle:             formData.subtitle || null,
@@ -463,7 +477,7 @@ export default function PromotionsPage() {
       max_usage:            formData.max_usage ? parseInt(formData.max_usage) : null,
       is_active:            formData.is_active,
       is_featured:          formData.is_featured,
-      display_order:        parseInt(formData.display_order) || 0,
+      display_order:        orderValue,
     };
     try {
       if (editingId) { await apiPatch(`/promotions/${editingId}`, payload); toast({ title: "Succès !", description: "Promotion modifiée" }); }
@@ -471,8 +485,6 @@ export default function PromotionsPage() {
       await fetchPromotions(); resetForm();
     } catch { toast({ title: "Erreur", description: "Erreur lors de la sauvegarde", variant: "destructive" }); }
   };
-
-  const handleEdit = (promo: Promotion) => {
     setFormData({
       title: promo.title, subtitle: promo.subtitle || "", description: promo.description || "",
       discount_value: promo.discount_value.toString(), discount_type: promo.discount_type,
@@ -500,28 +512,6 @@ export default function PromotionsPage() {
     setTimeout(() => {
       formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }, 50)
-  };
-
-  // ── Réordonner via boutons ↑↓ sur la table ────────────────────────────────
-  const handleReorder = async (promo: Promotion, direction: 'up' | 'down') => {
-    const list = [...sortedPromotions]
-    const idx  = list.findIndex(p => p.id === promo.id)
-    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
-    if (swapIdx < 0 || swapIdx >= list.length) return
-
-    const other = list[swapIdx]
-    setReorderingId(promo.id)
-    try {
-      await Promise.all([
-        apiPatch(`/promotions/${promo.id}`, { display_order: other.display_order }),
-        apiPatch(`/promotions/${other.id}`, { display_order: promo.display_order }),
-      ])
-      await fetchPromotions()
-    } catch {
-      toast({ title: "Erreur", description: "Impossible de réordonner", variant: "destructive" })
-    } finally {
-      setReorderingId(null)
-    }
   };
 
   const handleDelete = async (id: string) => {
@@ -564,7 +554,7 @@ export default function PromotionsPage() {
       : [...s.allowed_pages, page],
   }));
 
-  const colSpan = 9 + (canWrite ? 2 : 0);
+  const colSpan = 8 + (canWrite ? 1 : 0);
 
   const sortableCols: { key: SortKey; label: string }[] = [
     { key: "title", label: "Titre" }, { key: "discount", label: "Réduction" },
@@ -811,6 +801,27 @@ export default function PromotionsPage() {
                       <Label>Nombre max d'utilisations</Label>
                       <Input type="number" min="0" className="mt-1" value={formData.max_usage} onChange={e => setFormData({...formData, max_usage: e.target.value})} placeholder="Vide = illimité" />
                     </div>
+                    <div>
+                      <Label>Ordre d'affichage *</Label>
+                      <Input
+                        type="number" min="0" required className="mt-1"
+                        value={formData.display_order}
+                        onChange={e => setFormData({...formData, display_order: e.target.value})}
+                        placeholder="Ex: 1"
+                      />
+                      {/* Hint : numéros déjà pris par d'autres promotions */}
+                      {promotions.filter(p => p.id !== editingId).length > 0 && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          Déjà utilisés :{' '}
+                          {promotions
+                            .filter(p => p.id !== editingId)
+                            .map(p => p.display_order)
+                            .sort((a, b) => a - b)
+                            .join(', ')
+                          }
+                        </p>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2 md:col-span-2">
                       <input type="checkbox" id="is_active" checked={formData.is_active} onChange={e => setFormData({...formData, is_active: e.target.checked})} className="w-4 h-4" />
                       <Label htmlFor="is_active" className="cursor-pointer">Promotion active</Label>
@@ -863,7 +874,7 @@ export default function PromotionsPage() {
                   );
                 })}
                 <TableHead>Code</TableHead>
-                {canWrite && <TableHead className="w-20">Ordre</TableHead>}
+                <TableHead className="w-12 text-center">#</TableHead>
                 {canWrite && <TableHead>Activer</TableHead>}
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -918,28 +929,12 @@ export default function PromotionsPage() {
                         ? <code className="px-2 py-1 bg-gray-100 rounded text-xs font-mono">{promo.promo_code}</code>
                         : <span className="text-gray-400 text-xs">-</span>}
                     </TableCell>
-                    {canWrite && (
-                      <TableCell>
-                        <div className="flex flex-col gap-0.5">
-                          <button
-                            onClick={() => handleReorder(promo, 'up')}
-                            disabled={reorderingId === promo.id || sortedPromotions[0]?.id === promo.id}
-                            className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            title="Monter"
-                          >
-                            <ChevronUp className="w-3.5 h-3.5 text-gray-500" />
-                          </button>
-                          <button
-                            onClick={() => handleReorder(promo, 'down')}
-                            disabled={reorderingId === promo.id || sortedPromotions[sortedPromotions.length - 1]?.id === promo.id}
-                            className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            title="Descendre"
-                          >
-                            <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
-                          </button>
-                        </div>
-                      </TableCell>
-                    )}
+                    {/* Colonne # — numéro d'ordre visible */}
+                    <TableCell className="text-center">
+                      <span className="text-xs font-semibold text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">
+                        {promo.display_order}
+                      </span>
+                    </TableCell>
                     {canWrite && (
                       <TableCell>
                         <button onClick={() => handleToggleActive(promo)} disabled={togglingId === promo.id}
