@@ -485,6 +485,8 @@ export default function PromotionsPage() {
       await fetchPromotions(); resetForm();
     } catch { toast({ title: "Erreur", description: "Erreur lors de la sauvegarde", variant: "destructive" }); }
   };
+
+  const handleEdit = (promo: Promotion) => {
     setFormData({
       title: promo.title, subtitle: promo.subtitle || "", description: promo.description || "",
       discount_value: promo.discount_value.toString(), discount_type: promo.discount_type,
