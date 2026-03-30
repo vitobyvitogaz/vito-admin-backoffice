@@ -50,7 +50,7 @@ const GasBottleIcon = ({ className, style }: { className?: string; style?: React
 );
 
 // SortKey sans null
-type SortKey = "product_code" | "name" | "category" | "price" | "is_active";
+type SortKey = "product_code" | "name" | "category" | "price" | "is_active" | "order_position";
 
 interface Product {
   id: string;
@@ -132,6 +132,11 @@ export default function ProductsPage() {
         const valB = b.price ?? -1;
         return dir === "asc" ? valA - valB : valB - valA;
       }
+      if (col === "order_position") {
+        const valA = a.order_position ?? 999;
+        const valB = b.order_position ?? 999;
+        return dir === "asc" ? valA - valB : valB - valA;
+      }
       if (col === "is_active") {
         const valA = a.is_active ? 1 : 0;
         const valB = b.is_active ? 1 : 0;
@@ -183,9 +188,13 @@ export default function ProductsPage() {
       category: "Catégorie",
       price: "Prix",
       is_active: "Actif",
+      order_position: "Position",
     };
     if (sortColumn === "is_active") {
       return `Trié par Actif (${sortDirection === "desc" ? "Actifs en premier" : "Inactifs en premier"})`;
+    }
+    if (sortColumn === "order_position") {
+      return `Trié par Position (${sortDirection === "asc" ? "Croissant" : "Décroissant"})`;
     }
     return `Trié par ${labels[sortColumn]} (${sortDirection === "asc" ? "A → Z" : "Z → A"})`;
   };
@@ -615,7 +624,15 @@ export default function ProductsPage() {
                   );
                 })}
                 <TableHead>Vedette</TableHead>
-                <TableHead className="w-12 text-center">#</TableHead>
+                <TableHead
+                  className="w-12 text-center cursor-pointer select-none hover:bg-gray-50 transition-colors"
+                  onClick={() => handleSort("order_position")}
+                  style={sortColumn === "order_position" ? { backgroundColor: "#f0faf9", color: VITOGAZ_GREEN } : {}}
+                >
+                  <span className="flex items-center justify-center gap-1">
+                    #<SortIcon column="order_position" />
+                  </span>
+                </TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
