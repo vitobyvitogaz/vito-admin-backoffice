@@ -12,7 +12,7 @@ import {
 import {
   Truck, Plus, Edit, Trash2, Search, CheckCircle, ThumbsUp,
   X, Image as ImageIcon, Download, ChevronLeft, ChevronRight,
-  ArrowUpDown, ArrowUp, ArrowDown, Calendar, ChevronDown,
+  ArrowUpDown, ArrowUp, ArrowDown, Calendar, ChevronDown, Settings, Star,
 } from "lucide-react";
 import { toast } from "@/lib/use-toast";
 import { apiGet, apiPatch, apiPost, apiDelete } from "@/lib/api"; // ← apiGet ajouté
@@ -183,6 +183,9 @@ export default function DeliveryCompaniesPage() {
   const [editingId, setEditingId]                 = useState<string | null>(null);
   const [uploading, setUploading]                 = useState(false);
   const [togglingId, setTogglingId]               = useState<string | null>(null);
+  const [showFeedbackConfig, setShowFeedbackConfig] = useState(false);
+  const [feedbackSettings, setFeedbackSettings]     = useState({ delay_value: 2, delay_unit: 'hours' });
+  const [savingFeedback, setSavingFeedback]          = useState(false);
 
   const [sortColumn, setSortColumn]       = useState<SortKey | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
@@ -203,7 +206,7 @@ export default function DeliveryCompaniesPage() {
   const [featureInput, setFeatureInput]     = useState("");
   const [specialtyInput, setSpecialtyInput] = useState("");
 
-  useEffect(() => { fetchCompanies(); }, []);
+  useEffect(() => { fetchCompanies(); fetchFeedbackSettings(); }, []);
 
   useEffect(() => {
     if (searchQuery.trim() === "") {
@@ -257,6 +260,29 @@ export default function DeliveryCompaniesPage() {
     if (sortColumn === "rating")    return `Trié par Satisfaction (${sortDirection === "desc" ? "Mieux notés" : "Notes croissantes"})`;
     return `Trié par Nom (${sortDirection === "asc" ? "A → Z" : "Z → A"})`;
   };
+
+  const fetchFeedbackSettings = async () => {
+    try {
+      const data = await apiGet<any>('/settings/feedback_settings')
+      if (!data) return
+      const raw    = data?.setting_value ?? data?.value ?? data
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+      if (parsed?.delay_value) setFeedbackSettings(prev => ({ ...prev, ...parsed }))
+    } catch {}
+  }
+
+  const saveFeedbackSettings = async () => {
+    setSavingFeedback(true)
+    try {
+      await apiPatch('/settings/key/feedback_settings', {
+        setting_value: JSON.stringify(feedbackSettings),
+      })
+      toast({ title: "Succès !", description: "Configuration feedback sauvegardée" })
+      setShowFeedbackConfig(false)
+    } catch {
+      toast({ title: "Erreur", description: "Impossible de sauvegarder", variant: "destructive" })
+    } finally { setSavingFeedback(false) }
+  }
 
   const fetchCompanies = async () => {
     try {
@@ -453,6 +479,11 @@ export default function DeliveryCompaniesPage() {
             <Button variant="outline" onClick={handleExportCSV} disabled={sortedCompanies.length === 0} className="gap-2">
               <Download className="w-4 h-4" />Exporter CSV
             </Button>
+            {canWrite && (
+              <Button variant="outline" onClick={() => setShowFeedbackConfig(!showFeedbackConfig)} className="gap-2">
+                <Settings className="w-4 h-4" />Config Feedback
+              </Button>
+            )}
             {canDelete && (
               <Button onClick={() => setShowForm(!showForm)} className="gap-2 text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
                 <Plus className="w-4 h-4" />
@@ -461,6 +492,49 @@ export default function DeliveryCompaniesPage() {
             )}
           </div>
         </div>
+
+        {/* Config Feedback */}
+        {showFeedbackConfig && canWrite && (
+          <Card className="mb-6 border-2" style={{ borderColor: VITOGAZ_GREEN + "30" }}>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Settings className="w-4 h-4" style={{ color: VITOGAZ_GREEN }} />
+                Configuration du Feedback
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-gray-500">Délai avant l'envoi de la notification de notation à l'utilisateur qui a contacté une société.</p>
+              <div className="flex items-end gap-3">
+                <div>
+                  <Label>Valeur</Label>
+                  <Input
+                    type="number" min="1" max="999" className="mt-1 w-28"
+                    value={feedbackSettings.delay_value}
+                    onChange={e => setFeedbackSettings(s => ({ ...s, delay_value: parseInt(e.target.value) || 1 }))}
+                  />
+                </div>
+                <div>
+                  <Label>Unité</Label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1"
+                    value={feedbackSettings.delay_unit}
+                    onChange={e => setFeedbackSettings(s => ({ ...s, delay_unit: e.target.value }))}
+                  >
+                    <option value="minutes">Minutes</option>
+                    <option value="hours">Heures</option>
+                    <option value="days">Jours</option>
+                  </select>
+                </div>
+                <p className="text-xs text-gray-400 pb-2">
+                  → Notification envoyée {feedbackSettings.delay_value} {feedbackSettings.delay_unit === 'minutes' ? 'minute(s)' : feedbackSettings.delay_unit === 'hours' ? 'heure(s)' : 'jour(s)'} après le contact
+                </p>
+              </div>
+              <Button onClick={saveFeedbackSettings} disabled={savingFeedback} className="text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
+                {savingFeedback ? "Sauvegarde..." : "Enregistrer"}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Form */}
         {showForm && (canDelete || (canWrite && !!editingId)) && (
@@ -752,11 +826,11 @@ export default function DeliveryCompaniesPage() {
                     <TableCell>
                       {company.review_count > 0 ? (
                         <div className="flex flex-col gap-0.5">
-                          <div className="flex items-center gap-1 text-sm">
-                            <ThumbsUp className="w-3.5 h-3.5 text-emerald-500" strokeWidth={1.5} />
-                            <span className="font-medium text-emerald-600">
-                              {Math.round((company.rating / 5) * 100)}%
-                            </span>
+                          <div className="flex items-center gap-0.5">
+                            {[1,2,3,4,5].map(s => (
+                              <Star key={s} className={`w-3 h-3 ${s <= Math.round(company.rating) ? 'text-amber-500 fill-amber-500' : 'text-gray-200'}`} strokeWidth={1.5} />
+                            ))}
+                            <span className="text-xs font-medium text-gray-700 ml-1">{company.rating.toFixed(1)}</span>
                           </div>
                           <span className="text-[10px] text-gray-400">{company.review_count} avis</span>
                         </div>
