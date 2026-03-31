@@ -3,19 +3,28 @@
 import { useState, useEffect } from "react";
 import { getUserRole, getUserEmail } from "@/lib/auth";
 
-export type UserRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "API_CLIENT" | null;
+export type UserRole =
+  | "SUPER_ADMIN"
+  | "ADMIN"
+  | "EDITOR"
+  | "VIEWER"
+  | "API_CLIENT"
+  | "GESTIONNAIRE_PROMO"
+  | null;
 
 interface CurrentUser {
   role: UserRole;
   email: string | null;
   isSuperAdmin: boolean;
-  isAdmin: boolean;        // ADMIN ou SUPER_ADMIN
-  isEditor: boolean;       // EDITOR, ADMIN ou SUPER_ADMIN
-  canRead: boolean;        // tous sauf API_CLIENT
-  canWrite: boolean;       // EDITOR, ADMIN ou SUPER_ADMIN
-  canDelete: boolean;      // ADMIN ou SUPER_ADMIN
-  canManageUsers: boolean; // SUPER_ADMIN uniquement
-  canViewAudit: boolean;   // SUPER_ADMIN uniquement
+  isAdmin: boolean;
+  isEditor: boolean;
+  canRead: boolean;
+  canWrite: boolean;
+  canDelete: boolean;
+  canManageUsers: boolean;
+  canViewAudit: boolean;
+  isGestionnairePromo: boolean;
+  canManageScans: boolean;
 }
 
 export function useCurrentUser(): CurrentUser {
@@ -27,25 +36,22 @@ export function useCurrentUser(): CurrentUser {
     setEmail(getUserEmail());
   }, []);
 
-  const isSuperAdmin = role === "SUPER_ADMIN";
-  const isAdmin = role === "SUPER_ADMIN" || role === "ADMIN";
-  const isEditor = role === "SUPER_ADMIN" || role === "ADMIN" || role === "EDITOR";
-  const canRead = role !== null && role !== "API_CLIENT";
-  const canWrite = isEditor;  // ← correction : EDITOR peut modifier
-  const canDelete = isAdmin;  // ADMIN+ uniquement
-  const canManageUsers = isSuperAdmin;
-  const canViewAudit = isSuperAdmin;
+  const isSuperAdmin        = role === "SUPER_ADMIN";
+  const isGestionnairePromo = role === "GESTIONNAIRE_PROMO";
+  const isAdmin             = isSuperAdmin || role === "ADMIN";
+  const isEditor            = isAdmin || role === "EDITOR";
+  const canRead             = role !== null && role !== "API_CLIENT";
+  const canWrite            = isEditor;
+  const canDelete           = isAdmin;
+  const canManageUsers      = isSuperAdmin;
+  const canViewAudit        = isSuperAdmin;
+  const canManageScans      = isAdmin || isGestionnairePromo;
 
   return {
-    role,
-    email,
-    isSuperAdmin,
-    isAdmin,
-    isEditor,
-    canRead,
-    canWrite,
-    canDelete,
-    canManageUsers,
-    canViewAudit,
+    role, email,
+    isSuperAdmin, isAdmin, isEditor,
+    canRead, canWrite, canDelete,
+    canManageUsers, canViewAudit,
+    isGestionnairePromo, canManageScans,
   };
 }

@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table";
 import {
   Tag, Plus, Edit, Trash2, Search, Percent, X, Image as ImageIcon,
-  ArrowUpDown, ArrowUp, ArrowDown, Settings, Star, Check, ChevronDown,
+  ArrowUpDown, ArrowUp, ArrowDown, Settings, Star, Check, ChevronDown, QrCode, Download,
 } from "lucide-react";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { toast } from "@/lib/use-toast";
@@ -260,6 +260,10 @@ interface Promotion {
   product_category: string | null; zones: string[]; applicable_products: string[];
   conditions: string[]; usage_count: number; max_usage: number | null;
   is_active: boolean; is_featured: boolean; display_order: number;
+  // Champs scan QR
+  scan_enabled: boolean; scan_points: number;
+  scan_confirmation_message: string | null; scan_max_per_user: number;
+  scan_cooldown_hours: number;
 }
 
 interface PopupSettings {
@@ -286,6 +290,7 @@ export default function PromotionsPage() {
   const [togglingId, setTogglingId]           = useState<string | null>(null);
   const formRef                               = useRef<HTMLDivElement>(null);
   const [showPopupConfig, setShowPopupConfig] = useState(false);
+  const [showQrModal, setShowQrModal]         = useState<string | null>(null); // promo_code du QR à afficher
   const [popupSettings, setPopupSettings]     = useState<PopupSettings>({
     cooldown_hours: 48, delay_seconds: 3, allowed_pages: ['home'], auto_close_seconds: 30, enabled: true,
     popup_strategy: 'featured', popup_fixed_promo_id: '',
@@ -304,6 +309,9 @@ export default function PromotionsPage() {
     applicable_product_ids: [] as string[],
     conditions: [] as string[],
     max_usage: "", is_active: true, is_featured: false, display_order: "0",
+    // Scan QR
+    scan_enabled: false, scan_points: "0",
+    scan_confirmation_message: "", scan_max_per_user: "1", scan_cooldown_hours: "0",
   });
 
   const [newCondition, setNewCondition] = useState("");
@@ -480,6 +488,12 @@ export default function PromotionsPage() {
       is_active:            formData.is_active,
       is_featured:          formData.is_featured,
       display_order:        orderValue,
+      // Scan QR
+      scan_enabled:              formData.scan_enabled,
+      scan_points:               parseInt(formData.scan_points) || 0,
+      scan_confirmation_message: formData.scan_confirmation_message || null,
+      scan_max_per_user:         parseInt(formData.scan_max_per_user) || 1,
+      scan_cooldown_hours:       parseInt(formData.scan_cooldown_hours) || 0,
     };
     try {
       if (editingId) { await apiPatch(`/promotions/${editingId}`, payload); toast({ title: "Succès !", description: "Promotion modifiée" }); }
@@ -510,6 +524,11 @@ export default function PromotionsPage() {
       zones: promo.zones || [], applicable_product_ids: promo.applicable_products || [],
       conditions: promo.conditions || [], max_usage: promo.max_usage?.toString() || "",
       is_active: promo.is_active, is_featured: promo.is_featured, display_order: promo.display_order.toString(),
+      scan_enabled: promo.scan_enabled || false,
+      scan_points: (promo.scan_points || 0).toString(),
+      scan_confirmation_message: promo.scan_confirmation_message || "",
+      scan_max_per_user: (promo.scan_max_per_user || 1).toString(),
+      scan_cooldown_hours: (promo.scan_cooldown_hours || 0).toString(),
     });
     setEditingId(promo.id); setShowForm(true);
     // ── Scroll vers le formulaire ──────────────────────────────────────────
@@ -541,6 +560,8 @@ export default function PromotionsPage() {
       promo_code: "", valid_from: "", valid_until: "", image_url: "", product_category: [] as string[],
       zones: [], applicable_product_ids: [], conditions: [], max_usage: "",
       is_active: true, is_featured: false, display_order: "0",
+      scan_enabled: false, scan_points: "0",
+      scan_confirmation_message: "", scan_max_per_user: "1", scan_cooldown_hours: "0",
     });
     setNewCondition(""); setEditingId(null); setShowForm(false);
   };
@@ -889,6 +910,71 @@ export default function PromotionsPage() {
                   </div>
                 </div>
 
+                {/* 8. Programme Scan QR */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold border-b pb-2">8. Programme Scan QR</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex items-center gap-2 md:col-span-2">
+                      <input type="checkbox" id="scan_enabled" checked={formData.scan_enabled}
+                        onChange={e => setFormData({...formData, scan_enabled: e.target.checked})} className="w-4 h-4" />
+                      <Label htmlFor="scan_enabled" className="cursor-pointer flex items-center gap-1.5">
+                        <QrCode className="w-4 h-4" style={{ color: VITOGAZ_GREEN }} />
+                        Activer le scan QR pour cette promotion
+                      </Label>
+                    </div>
+                    {formData.scan_enabled && (
+                      <>
+                        <div>
+                          <Label>Points attribués par scan</Label>
+                          <Input type="number" min="0" className="mt-1" value={formData.scan_points}
+                            onChange={e => setFormData({...formData, scan_points: e.target.value})}
+                            placeholder="0 = participation sans points" />
+                          <p className="text-xs text-gray-400 mt-1">0 = participation simple, sans accumulation de points</p>
+                        </div>
+                        <div>
+                          <Label>Limite par utilisateur (téléphone)</Label>
+                          <Input type="number" min="0" className="mt-1" value={formData.scan_max_per_user}
+                            onChange={e => setFormData({...formData, scan_max_per_user: e.target.value})}
+                            placeholder="1" />
+                          <p className="text-xs text-gray-400 mt-1">0 = illimité · 1 = 1 seul scan par numéro</p>
+                        </div>
+                        <div>
+                          <Label>Cooldown entre scans (heures)</Label>
+                          <Input type="number" min="0" className="mt-1" value={formData.scan_cooldown_hours}
+                            onChange={e => setFormData({...formData, scan_cooldown_hours: e.target.value})}
+                            placeholder="0" />
+                          <p className="text-xs text-gray-400 mt-1">0 = pas de délai entre les scans</p>
+                        </div>
+                        <div className="md:col-span-2">
+                          <Label>Message de confirmation</Label>
+                          <Textarea className="mt-1" rows={3} value={formData.scan_confirmation_message}
+                            onChange={e => setFormData({...formData, scan_confirmation_message: e.target.value})}
+                            placeholder="Ex: Merci ! Vous participez au tirage au sort du 31 mars. Le gagnant sera contacté par téléphone." />
+                          <p className="text-xs text-gray-400 mt-1">Affiché à l'utilisateur après sa participation.</p>
+                        </div>
+                        {formData.promo_code && (
+                          <div className="md:col-span-2 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+                            <p className="text-sm font-semibold text-emerald-800 mb-2 flex items-center gap-2">
+                              <QrCode className="w-4 h-4" /> QR Code de cette promotion
+                            </p>
+                            <p className="text-xs text-emerald-700 mb-3">
+                              URL encodée : <code className="bg-white px-2 py-0.5 rounded font-mono">
+                                https://vitobyvitogaz.mg/fr/scan/{formData.promo_code}
+                              </code>
+                            </p>
+                            <p className="text-xs text-emerald-600">Le QR sera génératable depuis la liste des promotions après sauvegarde.</p>
+                          </div>
+                        )}
+                        {!formData.promo_code && (
+                          <div className="md:col-span-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                            <p className="text-xs text-amber-700">⚠ Vous devez définir un code avantage (section 2) pour activer le scan QR.</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+
                 <div className="flex gap-3 pt-4">
                   <Button type="submit" className="text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
                     {editingId ? "Mettre à jour" : "Créer"}
@@ -999,6 +1085,11 @@ export default function PromotionsPage() {
                     )}
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        {promo.promo_code && (promo as any).scan_enabled && (
+                          <Button variant="outline" size="sm" onClick={() => setShowQrModal(promo.promo_code!)} title="Générer QR Code">
+                            <QrCode className="w-4 h-4" />
+                          </Button>
+                        )}
                         {canWrite  && <Button variant="outline"     size="sm" onClick={() => handleEdit(promo)}><Edit  className="w-4 h-4" /></Button>}
                         {canDelete && <Button variant="destructive" size="sm" onClick={() => handleDelete(promo.id)}><Trash2 className="w-4 h-4" /></Button>}
                       </div>
@@ -1013,6 +1104,48 @@ export default function PromotionsPage() {
             <p className="text-sm text-gray-500">{sortedPromotions.length} promotion(s)</p>
           </div>
         </Card>
+        {/* ── Modal QR Code ── */}
+        {showQrModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowQrModal(null)}>
+            <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <QrCode className="w-5 h-5" style={{ color: VITOGAZ_GREEN }} />
+                  QR Code — <code className="font-mono text-sm">{showQrModal}</code>
+                </h3>
+                <button onClick={() => setShowQrModal(null)} className="p-1.5 rounded-full hover:bg-gray-100 transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex justify-center mb-6">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(`https://vitobyvitogaz.mg/fr/scan/${showQrModal}`)}&margin=10`}
+                  alt={`QR ${showQrModal}`}
+                  className="rounded-xl border border-gray-100"
+                  width={260} height={260}
+                />
+              </div>
+              <p className="text-xs text-gray-500 text-center mb-4 font-mono break-all">
+                https://vitobyvitogaz.mg/fr/scan/{showQrModal}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1 text-white gap-2"
+                  style={{ backgroundColor: VITOGAZ_GREEN }}
+                  onClick={() => {
+                    const url = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&data=${encodeURIComponent(`https://vitobyvitogaz.mg/fr/scan/${showQrModal}`)}&margin=20`
+                    const a = document.createElement('a'); a.href = url; a.download = `qr-${showQrModal}.png`; a.target = '_blank'; a.click()
+                  }}
+                >
+                  <Download className="w-4 h-4" /> Télécharger PNG
+                </Button>
+                <Button variant="outline" onClick={() => { navigator.clipboard.writeText(`https://vitobyvitogaz.mg/fr/scan/${showQrModal}`); }}>
+                  Copier URL
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

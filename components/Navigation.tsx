@@ -12,6 +12,8 @@ import {
   Users,
   ScrollText,
   Bell,
+  QrCode,
+  Gift,
 } from "lucide-react";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 
@@ -29,21 +31,24 @@ const GasBottleIcon = ({ className, strokeWidth }: { className?: string; strokeW
 );
 
 const baseNavItems = [
-  { href: "/",                   label: "Dashboard",      minRole: "VIEWER",      icon: LayoutDashboard },
-  { href: "/resellers",          label: "Revendeurs",     minRole: "VIEWER",      icon: Building2 },
-  { href: "/products",           label: "Produits",       minRole: "VIEWER",      icon: GasBottleIcon },
-  { href: "/delivery-companies", label: "Livraisons",     minRole: "VIEWER",      icon: Truck },
-  { href: "/promotions",         label: "Promotions",     minRole: "VIEWER",      icon: Tag },
-  { href: "/documents",          label: "Documents",      minRole: "VIEWER",      icon: FileText },
-  { href: "/notifications",      label: "Notifications",  minRole: "ADMIN",       icon: Bell },
-  { href: "/users",              label: "Utilisateurs",   minRole: "ADMIN",       icon: Users },
-  { href: "/audit",              label: "Journal",        minRole: "SUPER_ADMIN", icon: ScrollText },
+  { href: "/",                   label: "Dashboard",      minRole: "VIEWER",      extraRoles: ["GESTIONNAIRE_PROMO"], icon: LayoutDashboard },
+  { href: "/resellers",          label: "Revendeurs",     minRole: "VIEWER",      extraRoles: [],                     icon: Building2 },
+  { href: "/products",           label: "Produits",       minRole: "VIEWER",      extraRoles: [],                     icon: GasBottleIcon },
+  { href: "/delivery-companies", label: "Livraisons",     minRole: "VIEWER",      extraRoles: [],                     icon: Truck },
+  { href: "/promotions",         label: "Promotions",     minRole: "VIEWER",      extraRoles: [],                     icon: Tag },
+  { href: "/documents",          label: "Documents",      minRole: "VIEWER",      extraRoles: [],                     icon: FileText },
+  { href: "/scans",              label: "Participants",   minRole: "ADMIN",       extraRoles: ["GESTIONNAIRE_PROMO"], icon: QrCode },
+  { href: "/points-exchange",    label: "Échanges",       minRole: "ADMIN",       extraRoles: ["GESTIONNAIRE_PROMO"], icon: Gift },
+  { href: "/notifications",      label: "Notifications",  minRole: "ADMIN",       extraRoles: [],                     icon: Bell },
+  { href: "/users",              label: "Utilisateurs",   minRole: "ADMIN",       extraRoles: [],                     icon: Users },
+  { href: "/audit",              label: "Journal",        minRole: "SUPER_ADMIN", extraRoles: [],                     icon: ScrollText },
 ];
 
 const ROLE_HIERARCHY = ["API_CLIENT", "VIEWER", "EDITOR", "ADMIN", "SUPER_ADMIN"];
 
-function hasAccess(userRole: string | null, minRole: string): boolean {
+function hasAccess(userRole: string | null, minRole: string, extraRoles: string[] = []): boolean {
   if (!userRole) return false;
+  if (extraRoles.includes(userRole)) return true;
   const userLevel = ROLE_HIERARCHY.indexOf(userRole);
   const requiredLevel = ROLE_HIERARCHY.indexOf(minRole);
   if (userLevel === -1 || requiredLevel === -1) return false;
@@ -55,7 +60,7 @@ export function Navigation() {
   const { role } = useCurrentUser();
 
   const visibleItems = baseNavItems.filter((item) =>
-    hasAccess(role, item.minRole)
+    hasAccess(role, item.minRole, item.extraRoles)
   );
 
   return (
