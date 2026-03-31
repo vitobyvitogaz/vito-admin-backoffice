@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react"; // ← useRef ajouté
+import React, { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -146,6 +146,15 @@ const ZonePills = ({
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+interface Review {
+  id: string;
+  rating: number;
+  reviewer_name: string | null;
+  comment: string | null;
+  feedback_at: string;
+  contact_type: string;
+}
+
 interface DeliveryCompany {
   id: string;
   name: string;
@@ -186,6 +195,10 @@ export default function DeliveryCompaniesPage() {
   const [showFeedbackConfig, setShowFeedbackConfig] = useState(false);
   const [feedbackSettings, setFeedbackSettings]     = useState({ delay_value: 2, delay_unit: 'hours' });
   const [savingFeedback, setSavingFeedback]          = useState(false);
+  const [expandedReviews, setExpandedReviews]       = useState<string | null>(null);
+  const [reviewsMap, setReviewsMap]                 = useState<Record<string, Review[]>>({});
+  const [loadingReviews, setLoadingReviews]         = useState<string | null>(null);
+  const [deletingReview, setDeletingReview]         = useState<string | null>(null);
 
   const [sortColumn, setSortColumn]       = useState<SortKey | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
@@ -294,6 +307,40 @@ export default function DeliveryCompaniesPage() {
     } catch {
       toast({ title: "Erreur", description: "Impossible de sauvegarder", variant: "destructive" })
     } finally { setSavingFeedback(false) }
+  }
+
+  const loadReviews = async (companyId: string) => {
+    if (expandedReviews === companyId) { setExpandedReviews(null); return; }
+    setExpandedReviews(companyId)
+    if (reviewsMap[companyId]) return // déjà chargé
+    setLoadingReviews(companyId)
+    try {
+      const data = await apiGet<Review[]>(`/feedback/reviews/${companyId}`)
+      setReviewsMap(prev => ({ ...prev, [companyId]: data || [] }))
+    } catch {
+      setReviewsMap(prev => ({ ...prev, [companyId]: [] }))
+    } finally { setLoadingReviews(null) }
+  }
+
+  const handleDeleteReview = async (companyId: string, attemptId: string) => {
+    if (!confirm('Supprimer cet avis ? Cette action est irréversible.')) return
+    setDeletingReview(attemptId)
+    try {
+      await apiDelete(`/feedback/review/${attemptId}`)
+      setReviewsMap(prev => ({
+        ...prev,
+        [companyId]: (prev[companyId] || []).filter(r => r.id !== attemptId),
+      }))
+      await fetchCompanies() // Rafraîchir le rating affiché
+      toast({ title: "Avis supprimé" })
+    } catch {
+      toast({ title: "Erreur", description: "Impossible de supprimer l'avis", variant: "destructive" })
+    } finally { setDeletingReview(null) }
+  }
+
+  const formatReviewDate = (dateStr: string) => {
+    try { return new Date(dateStr).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) }
+    catch { return '' }
   }
 
   const fetchCompanies = async () => {
@@ -775,7 +822,8 @@ export default function DeliveryCompaniesPage() {
                 <TableRow><TableCell colSpan={canWrite ? 9 : 8} className="text-center py-8">Aucune société trouvée</TableCell></TableRow>
               ) : (
                 paginatedCompanies.map((company) => (
-                  <TableRow key={company.id} className={!company.is_active ? "opacity-50" : ""}>
+                  <React.Fragment key={company.id}>
+                  <TableRow className={!company.is_active ? "opacity-50" : ""}>
                     <TableCell>
                       {company.logo_url ? (
                         <img src={company.logo_url} alt={company.name} className="w-12 h-12 object-contain rounded-lg bg-white p-1 border" />
@@ -864,11 +912,89 @@ export default function DeliveryCompaniesPage() {
                     )}
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        {company.review_count > 0 && (
+                          <Button variant="outline" size="sm" onClick={() => loadReviews(company.id)}
+                            className={expandedReviews === company.id ? 'bg-amber-50 border-amber-300 text-amber-700' : ''}>
+                            <Star className="w-4 h-4" />
+                            <span className="ml-1 text-xs">{company.review_count}</span>
+                          </Button>
+                        )}
                         {canWrite && <Button variant="outline" size="sm" onClick={() => handleEdit(company)}><Edit className="w-4 h-4" /></Button>}
                         {canDelete && <Button variant="destructive" size="sm" onClick={() => handleDelete(company.id)}><Trash2 className="w-4 h-4" /></Button>}
                       </div>
                     </TableCell>
                   </TableRow>
+
+                  {/* ── Panneau avis inline ── */}
+                  {expandedReviews === company.id && (
+                    <TableRow>
+                      <TableCell colSpan={canWrite ? 9 : 8} className="p-0 bg-amber-50/50">
+                        <div className="px-6 py-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                              <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                              Avis clients — {company.name}
+                              <span className="text-xs font-normal text-gray-500">({company.review_count} avis · {company.rating.toFixed(1)}/5)</span>
+                            </h4>
+                            <button onClick={() => setExpandedReviews(null)} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                              Fermer
+                            </button>
+                          </div>
+
+                          {loadingReviews === company.id ? (
+                            <div className="flex items-center gap-2 py-4">
+                              <div className="w-4 h-4 border-2 border-amber-400/30 border-t-amber-500 rounded-full animate-spin" />
+                              <span className="text-sm text-gray-400">Chargement des avis...</span>
+                            </div>
+                          ) : (reviewsMap[company.id] || []).length === 0 ? (
+                            <p className="text-sm text-gray-400 py-2">Aucun avis pour cette société.</p>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {(reviewsMap[company.id] || []).map((review) => (
+                                <div key={review.id} className="bg-white rounded-xl p-4 border border-amber-100 relative">
+                                  {/* Supprimer — SUPER_ADMIN uniquement */}
+                                  {canDelete && (
+                                    <button
+                                      onClick={() => handleDeleteReview(company.id, review.id)}
+                                      disabled={deletingReview === review.id}
+                                      className="absolute top-3 right-3 p-1.5 rounded-full text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all"
+                                      title="Supprimer cet avis"
+                                    >
+                                      {deletingReview === review.id
+                                        ? <div className="w-3.5 h-3.5 border-2 border-red-400/30 border-t-red-500 rounded-full animate-spin" />
+                                        : <Trash2 className="w-3.5 h-3.5" />
+                                      }
+                                    </button>
+                                  )}
+                                  <div className="flex items-center gap-2.5 mb-2 pr-6">
+                                    <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-sm text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
+                                      {review.reviewer_name?.charAt(0).toUpperCase() || '?'}
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-semibold text-gray-800 leading-tight">{review.reviewer_name || 'Anonyme'}</p>
+                                      <p className="text-[10px] text-gray-400">{formatReviewDate(review.feedback_at)}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-0.5 mb-2">
+                                    {[1,2,3,4,5].map(s => (
+                                      <Star key={s} className={`w-3.5 h-3.5 ${s <= review.rating ? 'text-amber-500 fill-amber-500' : 'text-gray-200'}`} strokeWidth={1.5} />
+                                    ))}
+                                    <span className="text-xs font-medium text-gray-600 ml-1">{review.rating}/5</span>
+                                  </div>
+                                  {review.comment ? (
+                                    <p className="text-xs text-gray-600 italic leading-relaxed">"{review.comment}"</p>
+                                  ) : (
+                                    <p className="text-xs text-gray-300 italic">Pas de commentaire</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  </React.Fragment>
                 ))
               )}
             </TableBody>
