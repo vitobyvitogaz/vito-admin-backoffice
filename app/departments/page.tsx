@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -30,11 +29,11 @@ interface Department {
 
 export default function DepartmentsPage() {
   const router = useRouter();
-  const { isSuperAdmin } = useCurrentUser();
+  const { isSuperAdmin, loading } = useCurrentUser();
 
   const [departments, setDepartments] = useState<Department[]>([]);
   const [filteredDepartments, setFilteredDepartments] = useState<Department[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -45,12 +44,18 @@ export default function DepartmentsPage() {
   });
 
   useEffect(() => {
+    // Attendre que le chargement du rôle soit terminé
+    if (loading) return;
+    
+    // Si pas SUPER_ADMIN, rediriger
     if (!isSuperAdmin) {
       router.push("/");
       return;
     }
+    
+    // Charger les départements
     fetchDepartments();
-  }, [isSuperAdmin, router]);
+  }, [isSuperAdmin, loading, router]);
 
   useEffect(() => {
     if (searchQuery.trim() === "") {
@@ -68,7 +73,7 @@ export default function DepartmentsPage() {
 
   const fetchDepartments = async () => {
     try {
-      setLoading(true);
+      setDataLoading(true);
       const data = await apiGet<Department[]>("/departments");
       setDepartments(data || []);
       setFilteredDepartments(data || []);
@@ -79,7 +84,7 @@ export default function DepartmentsPage() {
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      setDataLoading(false);
     }
   };
 
@@ -136,6 +141,20 @@ export default function DepartmentsPage() {
     setShowForm(false);
   };
 
+  // Afficher un loader pendant le chargement du rôle
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-gray-200 rounded-full animate-spin mx-auto mb-4" 
+               style={{ borderTopColor: VITOGAZ_GREEN }} />
+          <p className="text-gray-500">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Si pas SUPER_ADMIN, ne rien afficher (la redirection est en cours)
   if (!isSuperAdmin) {
     return null;
   }
@@ -257,7 +276,7 @@ export default function DepartmentsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
+              {dataLoading ? (
                 <TableRow>
                   <TableCell colSpan={4} className="text-center py-8">
                     Chargement...

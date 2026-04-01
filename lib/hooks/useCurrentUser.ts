@@ -15,6 +15,7 @@ export type UserRole =
 interface CurrentUser {
   role: UserRole;
   email: string | null;
+  loading: boolean;
   isSuperAdmin: boolean;
   isAdmin: boolean;
   isEditor: boolean;
@@ -30,10 +31,12 @@ interface CurrentUser {
 export function useCurrentUser(): CurrentUser {
   const [role, setRole] = useState<UserRole>(null);
   const [email, setEmail] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setRole(getUserRole() as UserRole);
     setEmail(getUserEmail());
+    setLoading(false);
   }, []);
 
   const isSuperAdmin        = role === "SUPER_ADMIN";
@@ -48,7 +51,7 @@ export function useCurrentUser(): CurrentUser {
   const canManageScans      = isAdmin || isGestionnairePromo;
 
   return {
-    role, email,
+    role, email, loading,
     isSuperAdmin, isAdmin, isEditor,
     canRead, canWrite, canDelete,
     canManageUsers, canViewAudit,
