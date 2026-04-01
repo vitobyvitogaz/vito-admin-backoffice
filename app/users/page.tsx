@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/table";
 import {
   Users, Plus, Pencil, Trash2, Search, Shield, ShieldCheck,
-  User, Eye, KeyRound, RefreshCw, Lock, Star,
+  User, Eye, KeyRound, RefreshCw, Lock, Star, ArrowUpDown, ArrowUp, ArrowDown,
 } from "lucide-react";
 import { format } from "date-fns";
 import { Header } from "@/components/Header";
@@ -33,8 +33,12 @@ interface AppUser {
   updated_at: string;
 }
 
+type SortColumn = "email" | "role" | "status" | "created_at" | null;
+type SortDirection = "asc" | "desc";
+
 export default function UsersPage() {
   const { isSuperAdmin, canManageUsers } = useCurrentUser();
+  const formRef = useRef<HTMLDivElement>(null);
 
   const [users, setUsers]                   = useState<AppUser[]>([]);
   const [filteredUsers, setFilteredUsers]   = useState<AppUser[]>([]);
@@ -45,6 +49,8 @@ export default function UsersPage() {
   const [resettingId, setResettingId]       = useState<string | null>(null);
   const [showResetForm, setShowResetForm]   = useState<string | null>(null);
   const [newPassword, setNewPassword]       = useState("");
+  const [sortColumn, setSortColumn]         = useState<SortColumn>(null);
+  const [sortDirection, setSortDirection]   = useState<SortDirection>("asc");
 
   const [formData, setFormData] = useState({
     email: "", first_name: "", last_name: "", role: "VIEWER", password: "",
@@ -117,6 +123,11 @@ export default function UsersPage() {
     setEditingId(user.id);
     setShowForm(true);
     setShowResetForm(null);
+    
+    // Scroll automatique vers le formulaire
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   };
 
   const handleDelete = async (id: string) => {
@@ -160,6 +171,60 @@ export default function UsersPage() {
     setShowForm(false);
   };
 
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortColumn(column);
+      setSortDirection("asc");
+    }
+  };
+
+  const getSortedUsers = () => {
+    if (!sortColumn) return filteredUsers;
+
+    const sorted = [...filteredUsers].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortColumn) {
+        case "email":
+          aValue = a.email.toLowerCase();
+          bValue = b.email.toLowerCase();
+          break;
+        case "role":
+          aValue = a.role;
+          bValue = b.role;
+          break;
+        case "status":
+          aValue = a.status;
+          bValue = b.status;
+          break;
+        case "created_at":
+          aValue = new Date(a.created_at).getTime();
+          bValue = new Date(b.created_at).getTime();
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
+      if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return sorted;
+  };
+
+  const SortIcon = ({ column }: { column: SortColumn }) => {
+    if (sortColumn !== column) {
+      return <ArrowUpDown className="w-3 h-3 ml-1 text-gray-400" />;
+    }
+    return sortDirection === "asc" 
+      ? <ArrowUp className="w-3 h-3 ml-1" style={{ color: VITOGAZ_GREEN }} />
+      : <ArrowDown className="w-3 h-3 ml-1" style={{ color: VITOGAZ_GREEN }} />;
+  };
+
   const getRoleIcon = (role: string) => {
     switch (role) {
       case "SUPER_ADMIN":        return <ShieldCheck className="w-4 h-4 text-red-600" />;
@@ -199,6 +264,8 @@ export default function UsersPage() {
     if (user.first_name || user.last_name) return `${user.first_name || ''} ${user.last_name || ''}`.trim();
     return null;
   };
+
+  const sortedUsers = getSortedUsers();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -247,66 +314,68 @@ export default function UsersPage() {
 
         {/* Formulaire */}
         {showForm && canManageUsers && (
-          <Card className="mb-6">
-            <CardHeader><CardTitle>{editingId ? "Modifier l'Utilisateur" : "Nouvel Utilisateur"}</CardTitle></CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {!editingId ? (
-                    <div className="md:col-span-2">
-                      <Label htmlFor="email">Email *</Label>
-                      <Input id="email" type="email" required value={formData.email}
-                        onChange={e => setFormData({ ...formData, email: e.target.value })} />
+          <div ref={formRef}>
+            <Card className="mb-6">
+              <CardHeader><CardTitle>{editingId ? "Modifier l'Utilisateur" : "Nouvel Utilisateur"}</CardTitle></CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {!editingId ? (
+                      <div className="md:col-span-2">
+                        <Label htmlFor="email">Email *</Label>
+                        <Input id="email" type="email" required value={formData.email}
+                          onChange={e => setFormData({ ...formData, email: e.target.value })} />
+                      </div>
+                    ) : (
+                      <div className="md:col-span-2">
+                        <p className="text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded-md">Email : <strong>{formData.email}</strong> (non modifiable)</p>
+                      </div>
+                    )}
+                    <div>
+                      <Label htmlFor="first_name">Prénom</Label>
+                      <Input id="first_name" value={formData.first_name}
+                        onChange={e => setFormData({ ...formData, first_name: e.target.value })} placeholder="Jean" />
                     </div>
-                  ) : (
-                    <div className="md:col-span-2">
-                      <p className="text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded-md">Email : <strong>{formData.email}</strong> (non modifiable)</p>
+                    <div>
+                      <Label htmlFor="last_name">Nom</Label>
+                      <Input id="last_name" value={formData.last_name}
+                        onChange={e => setFormData({ ...formData, last_name: e.target.value })} placeholder="Rakoto" />
                     </div>
-                  )}
-                  <div>
-                    <Label htmlFor="first_name">Prénom</Label>
-                    <Input id="first_name" value={formData.first_name}
-                      onChange={e => setFormData({ ...formData, first_name: e.target.value })} placeholder="Jean" />
-                  </div>
-                  <div>
-                    <Label htmlFor="last_name">Nom</Label>
-                    <Input id="last_name" value={formData.last_name}
-                      onChange={e => setFormData({ ...formData, last_name: e.target.value })} placeholder="Rakoto" />
-                  </div>
-                  <div>
-                    <Label htmlFor="role">Rôle *</Label>
-                    <select id="role" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}>
-                      <option value="SUPER_ADMIN">Super Admin</option>
-                      <option value="ADMIN">Admin</option>
-                      <option value="EDITOR">Éditeur</option>
-                      <option value="VIEWER">Lecteur</option>
-                      <option value="GESTIONNAIRE_PROMO">Gestionnaire Promo</option>
-                      <option value="API_CLIENT">Client API</option>
-                    </select>
+                    <div>
+                      <Label htmlFor="role">Rôle *</Label>
+                      <select id="role" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}>
+                        <option value="SUPER_ADMIN">Super Admin</option>
+                        <option value="ADMIN">Admin</option>
+                        <option value="EDITOR">Éditeur</option>
+                        <option value="VIEWER">Lecteur</option>
+                        <option value="GESTIONNAIRE_PROMO">Gestionnaire Promo</option>
+                        <option value="API_CLIENT">Client API</option>
+                      </select>
+                    </div>
+                    {!editingId && (
+                      <div>
+                        <Label htmlFor="password">Mot de passe *</Label>
+                        <Input id="password" type="password" required value={formData.password}
+                          onChange={e => setFormData({ ...formData, password: e.target.value })} placeholder="Minimum 8 caractères" />
+                      </div>
+                    )}
                   </div>
                   {!editingId && (
-                    <div>
-                      <Label htmlFor="password">Mot de passe *</Label>
-                      <Input id="password" type="password" required value={formData.password}
-                        onChange={e => setFormData({ ...formData, password: e.target.value })} placeholder="Minimum 8 caractères" />
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+                      ⚠️ <strong>Important :</strong> L'utilisateur pourra se connecter avec ces identifiants.
                     </div>
                   )}
-                </div>
-                {!editingId && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-                    ⚠️ <strong>Important :</strong> L'utilisateur pourra se connecter avec ces identifiants.
+                  <div className="flex gap-3">
+                    <Button type="submit" className="text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
+                      {editingId ? "Mettre à jour" : "Créer"}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={resetForm}>Annuler</Button>
                   </div>
-                )}
-                <div className="flex gap-3">
-                  <Button type="submit" className="text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
-                    {editingId ? "Mettre à jour" : "Créer"}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={resetForm}>Annuler</Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {/* Reset password */}
@@ -344,20 +413,52 @@ export default function UsersPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Utilisateur</TableHead>
-                <TableHead>Rôle</TableHead>
+                <TableHead 
+                  className="cursor-pointer select-none hover:bg-gray-50"
+                  onClick={() => handleSort("email")}
+                >
+                  <div className="flex items-center">
+                    Utilisateur
+                    <SortIcon column="email" />
+                  </div>
+                </TableHead>
+                <TableHead 
+                  className="cursor-pointer select-none hover:bg-gray-50"
+                  onClick={() => handleSort("role")}
+                >
+                  <div className="flex items-center">
+                    Rôle
+                    <SortIcon column="role" />
+                  </div>
+                </TableHead>
                 <TableHead>Permissions</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead>Créé le</TableHead>
+                <TableHead 
+                  className="cursor-pointer select-none hover:bg-gray-50"
+                  onClick={() => handleSort("status")}
+                >
+                  <div className="flex items-center">
+                    Statut
+                    <SortIcon column="status" />
+                  </div>
+                </TableHead>
+                <TableHead 
+                  className="cursor-pointer select-none hover:bg-gray-50"
+                  onClick={() => handleSort("created_at")}
+                >
+                  <div className="flex items-center">
+                    Créé le
+                    <SortIcon column="created_at" />
+                  </div>
+                </TableHead>
                 {canManageUsers && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow><TableCell colSpan={canManageUsers ? 6 : 5} className="text-center py-8">Chargement...</TableCell></TableRow>
-              ) : filteredUsers.length === 0 ? (
+              ) : sortedUsers.length === 0 ? (
                 <TableRow><TableCell colSpan={canManageUsers ? 6 : 5} className="text-center py-8">Aucun utilisateur trouvé</TableCell></TableRow>
-              ) : filteredUsers.map(user => (
+              ) : sortedUsers.map(user => (
                 <TableRow key={user.id}>
                   <TableCell>
                     <div className="flex flex-col">
@@ -404,7 +505,7 @@ export default function UsersPage() {
             <p className="text-xs text-gray-400 italic">
               {canManageUsers ? "Connecté à l'API — données en temps réel" : "Vue en lecture seule"}
             </p>
-            <p className="text-sm text-gray-500">{filteredUsers.length} utilisateur(s)</p>
+            <p className="text-sm text-gray-500">{sortedUsers.length} utilisateur(s)</p>
           </div>
         </Card>
       </main>
