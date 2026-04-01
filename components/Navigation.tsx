@@ -31,25 +31,31 @@ const GasBottleIcon = ({ className, strokeWidth }: { className?: string; strokeW
 );
 
 const baseNavItems = [
-  { href: "/",                   label: "Dashboard",      minRole: "VIEWER",      extraRoles: [],                     icon: LayoutDashboard },
-  { href: "/resellers",          label: "Revendeurs",     minRole: "VIEWER",      extraRoles: [],                     icon: Building2 },
-  { href: "/products",           label: "Produits",       minRole: "VIEWER",      extraRoles: [],                     icon: GasBottleIcon },
-  { href: "/delivery-companies", label: "Livraisons",     minRole: "VIEWER",      extraRoles: [],                     icon: Truck },
-  { href: "/promotions",         label: "Promotions",     minRole: "VIEWER",      extraRoles: [],                     icon: Tag },
-  { href: "/documents",          label: "Documents",      minRole: "VIEWER",      extraRoles: [],                     icon: FileText },
-  { href: "/scans",              label: "Participants",   minRole: "ADMIN",       extraRoles: ["GESTIONNAIRE_PROMO"], icon: QrCode },
-  { href: "/points-exchange",    label: "Échanges",       minRole: "ADMIN",       extraRoles: ["GESTIONNAIRE_PROMO"], icon: Gift },
-  { href: "/notifications",      label: "Notifications",  minRole: "ADMIN",       extraRoles: [],                     icon: Bell },
-  { href: "/departments",        label: "Départements",   minRole: "SUPER_ADMIN", extraRoles: [],                     icon: Building2 },
-  { href: "/users",              label: "Utilisateurs",   minRole: "ADMIN",       extraRoles: [],                     icon: Users },
-  { href: "/audit",              label: "Journal",        minRole: "SUPER_ADMIN", extraRoles: [],                     icon: ScrollText },
+  { href: "/",                   label: "Dashboard",      minRole: "VIEWER",      extraRoles: [],                     excludedRoles: ["GESTIONNAIRE_PROMO"], icon: LayoutDashboard },
+  { href: "/resellers",          label: "Revendeurs",     minRole: "VIEWER",      extraRoles: [],                     excludedRoles: [],                     icon: Building2 },
+  { href: "/products",           label: "Produits",       minRole: "VIEWER",      extraRoles: [],                     excludedRoles: [],                     icon: GasBottleIcon },
+  { href: "/delivery-companies", label: "Livraisons",     minRole: "VIEWER",      extraRoles: [],                     excludedRoles: [],                     icon: Truck },
+  { href: "/promotions",         label: "Promotions",     minRole: "VIEWER",      extraRoles: [],                     excludedRoles: [],                     icon: Tag },
+  { href: "/documents",          label: "Documents",      minRole: "VIEWER",      extraRoles: [],                     excludedRoles: [],                     icon: FileText },
+  { href: "/scans",              label: "Participants",   minRole: "ADMIN",       extraRoles: ["GESTIONNAIRE_PROMO"], excludedRoles: [],                     icon: QrCode },
+  { href: "/points-exchange",    label: "Échanges",       minRole: "ADMIN",       extraRoles: ["GESTIONNAIRE_PROMO"], excludedRoles: [],                     icon: Gift },
+  { href: "/notifications",      label: "Notifications",  minRole: "ADMIN",       extraRoles: [],                     excludedRoles: [],                     icon: Bell },
+  { href: "/departments",        label: "Départements",   minRole: "SUPER_ADMIN", extraRoles: [],                     excludedRoles: [],                     icon: Building2 },
+  { href: "/users",              label: "Utilisateurs",   minRole: "ADMIN",       extraRoles: [],                     excludedRoles: [],                     icon: Users },
+  { href: "/audit",              label: "Journal",        minRole: "SUPER_ADMIN", extraRoles: [],                     excludedRoles: [],                     icon: ScrollText },
 ];
 
 const ROLE_HIERARCHY = ["API_CLIENT", "VIEWER", "EDITOR", "ADMIN", "SUPER_ADMIN"];
 
-function hasAccess(userRole: string | null, minRole: string, extraRoles: string[] = []): boolean {
+function hasAccess(userRole: string | null, minRole: string, extraRoles: string[] = [], excludedRoles: string[] = []): boolean {
   if (!userRole) return false;
+  
+  // Bloquer si dans excludedRoles
+  if (excludedRoles.includes(userRole)) return false;
+  
+  // Autoriser si dans extraRoles
   if (extraRoles.includes(userRole)) return true;
+  
   const userLevel = ROLE_HIERARCHY.indexOf(userRole);
   const requiredLevel = ROLE_HIERARCHY.indexOf(minRole);
   if (userLevel === -1 || requiredLevel === -1) return false;
@@ -61,7 +67,7 @@ export function Navigation() {
   const { role } = useCurrentUser();
 
   const visibleItems = baseNavItems.filter((item) =>
-    hasAccess(role, item.minRole, item.extraRoles)
+    hasAccess(role, item.minRole, item.extraRoles, item.excludedRoles)
   );
 
   return (
