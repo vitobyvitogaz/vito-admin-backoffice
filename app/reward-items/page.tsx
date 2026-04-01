@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Gift, Plus, Pencil, Trash2, Search, X, Image as ImageIcon, ArrowUpDown, ArrowUp, ArrowDown, Package } from "lucide-react";
+import { Gift, Plus, Pencil, Trash2, Search, X, Package, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { toast } from "@/lib/use-toast";
 import { Header } from "@/components/Header";
@@ -52,7 +52,7 @@ export default function RewardItemsPage() {
   const [sortedItems, setSortedItems] = useState<RewardItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showForm, setShowForm] = useState(false);
+  const [isFormVisible, setIsFormVisible] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -278,7 +278,7 @@ export default function RewardItemsPage() {
       status: item.status,
     });
     setEditingId(item.id);
-    setShowForm(true);
+    setIsFormVisible(true);
     setTimeout(() => {
       formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 100);
@@ -312,7 +312,19 @@ export default function RewardItemsPage() {
       status: "ACTIVE",
     });
     setEditingId(null);
-    setShowForm(false);
+    setIsFormVisible(false);
+  };
+
+  const toggleForm = () => {
+    const newState = !isFormVisible;
+    setIsFormVisible(newState);
+    if (!newState) {
+      resetForm();
+    } else {
+      setTimeout(() => {
+        formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    }
   };
 
   const getStockBadge = (stock: number) => {
@@ -370,15 +382,12 @@ export default function RewardItemsPage() {
           </div>
           {canManage && (
             <Button
-              onClick={() => {
-                setShowForm(!showForm);
-                if (!showForm) resetForm();
-              }}
+              onClick={toggleForm}
               className="gap-2 text-white"
               style={{ backgroundColor: VITOGAZ_GREEN }}
             >
               <Plus className="w-4 h-4" />
-              {showForm ? "Annuler" : "Nouvel Article"}
+              {isFormVisible ? "Annuler" : "Nouvel Article"}
             </Button>
           )}
         </div>
@@ -401,7 +410,7 @@ export default function RewardItemsPage() {
           </CardContent>
         </Card>
 
-        {showForm && canManage && (
+        {isFormVisible && canManage && (
           <div ref={formRef}>
             <Card className="mb-6">
               <CardHeader>
