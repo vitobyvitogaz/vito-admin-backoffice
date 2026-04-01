@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Gift, Plus, Pencil, Trash2, Search, X, Package, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Gift, Plus, Pencil, Trash2, Search, X, Package, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { toast } from "@/lib/use-toast";
 import { Header } from "@/components/Header";
@@ -17,6 +17,7 @@ import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 
 const API_URL = 'https://vito-backend-supabase.onrender.com/api/v1';
 const VITOGAZ_GREEN = "#008B7F";
+const ITEMS_PER_PAGE = 10;
 
 type SortKey = "name" | "points_cost" | "stock_quantity" | "category" | "status";
 
@@ -44,7 +45,7 @@ const CATEGORIES = [
 
 export default function RewardItemsPage() {
   const { role } = useCurrentUser();
-  const canManage = role === "ADMIN" || role === "GESTIONNAIRE_PROMO";
+  const canManage = role === "ADMIN" || role === "GESTIONNAIRE_PROMO" || role === "SUPER_ADMIN";
   const formRef = useRef<HTMLDivElement>(null);
 
   const [items, setItems] = useState<RewardItem[]>([]);
@@ -55,6 +56,7 @@ export default function RewardItemsPage() {
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [sortColumn, setSortColumn] = useState<SortKey | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
@@ -87,6 +89,7 @@ export default function RewardItemsPage() {
           (item.description && item.description.toLowerCase().includes(q))
       )
     );
+    setCurrentPage(1); // Reset à la page 1 lors d'une recherche
   }, [searchQuery, items]);
 
   useEffect(() => {
@@ -130,6 +133,7 @@ export default function RewardItemsPage() {
     });
 
     setSortedItems(sorted);
+    setCurrentPage(1); // Reset à la page 1 lors d'un tri
   }, [filteredItems, sortColumn, sortDirection]);
 
   const handleSort = (col: SortKey) => {
@@ -201,7 +205,7 @@ export default function RewardItemsPage() {
       if (!token) {
         toast({
           title: "Erreur",
-          description: "Session expirée",
+          description: "Session expirée, reconnectez-vous",
           variant: "destructive",
         });
         return;
@@ -227,8 +231,8 @@ export default function RewardItemsPage() {
     } catch (error: any) {
       console.error("Upload error:", error);
       toast({
-        title: "Erreur",
-        description: error.message || "Erreur upload",
+        title: "Erreur upload",
+        description: error.message || "Impossible d'uploader l'image. Vérifiez votre session.",
         variant: "destructive",
       });
     } finally {
@@ -364,6 +368,21 @@ export default function RewardItemsPage() {
     return `Trié par ${colData.label} (${sortDirection === "asc" ? "Croissant" : "Décroissant"})`;
   };
 
+  // Calcul du stock total (somme)
+  const totalStock = items.reduce((sum, item) => sum + item.stock_quantity, 0);
+
+  // Pagination
+  const totalPages = Math.ceil(sortedItems.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedItems = sortedItems.slice(startIndex, endIndex);
+
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header title="Vito Admin" subtitle="CATALOGUE ARTICLES À ÉCHANGER" />
@@ -376,7 +395,7 @@ export default function RewardItemsPage() {
             <div>
               <h2 className="text-2xl font-bold">Articles à Échanger</h2>
               <p className="text-sm text-gray-500">
-                {items.length} article(s) • {items.filter((i) => i.stock_quantity > 0).length} en stock
+                {items.length} article(s) • {totalStock} unités en stock
               </p>
             </div>
           </div>
@@ -429,6 +448,7 @@ export default function RewardItemsPage() {
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         placeholder="Ex: T-shirt Vitogaz"
                       />
+                      <p className="text-xs text-gray-400 mt-1">{formData.name.length}/200 caractères</p>
                     </div>
 
                     <div className="md:col-span-2">
@@ -436,10 +456,12 @@ export default function RewardItemsPage() {
                       <Textarea
                         id="description"
                         rows={3}
+                        maxLength={1000}
                         value={formData.description}
                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                         placeholder="Description détaillée de l'article"
                       />
+                      <p className="text-xs text-gray-400 mt-1">{formData.description.length}/1000 caractères</p>
                     </div>
 
                     <div className="md:col-span-2">
@@ -483,6 +505,7 @@ export default function RewardItemsPage() {
                         id="points_cost"
                         type="number"
                         min="1"
+                        max="999999"
                         required
                         value={formData.points_cost}
                         onChange={(e) => setFormData({ ...formData, points_cost: e.target.value })}
@@ -496,6 +519,7 @@ export default function RewardItemsPage() {
                         id="stock_quantity"
                         type="number"
                         min="0"
+                        max="999999"
                         required
                         value={formData.stock_quantity}
                         onChange={(e) =>
@@ -599,14 +623,14 @@ export default function RewardItemsPage() {
                     Chargement...
                   </TableCell>
                 </TableRow>
-              ) : sortedItems.length === 0 ? (
+              ) : paginatedItems.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={canManage ? 7 : 6} className="text-center py-8">
                     Aucun article trouvé
                   </TableCell>
                 </TableRow>
               ) : (
-                sortedItems.map((item) => (
+                paginatedItems.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>
                       {item.image_url ? (
@@ -679,9 +703,40 @@ export default function RewardItemsPage() {
               )}
             </TableBody>
           </Table>
+          
+          {/* Footer avec pagination */}
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 min-h-[52px]">
-            <p className="text-xs text-gray-400 italic">{sortLabel() || ""}</p>
-            <p className="text-sm text-gray-500">{sortedItems.length} article(s)</p>
+            <div className="flex items-center gap-4">
+              <p className="text-xs text-gray-400 italic">{sortLabel() || ""}</p>
+              {totalPages > 1 && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="h-8"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <span className="text-sm text-gray-600">
+                    Page {currentPage} / {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="h-8"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+            <p className="text-sm text-gray-500">
+              {startIndex + 1}-{Math.min(endIndex, sortedItems.length)} sur {sortedItems.length} article(s)
+            </p>
           </div>
         </Card>
       </main>
