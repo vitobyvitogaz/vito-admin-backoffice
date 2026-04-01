@@ -35,12 +35,21 @@ interface RewardItem {
 }
 
 const CATEGORIES = [
-  "Vêtements",
-  "Électronique",
-  "Bons d'achat",
-  "Articles ménagers",
-  "Accessoires",
-  "Autres",
+  "Électronique & High-Tech",
+  "Mode & Vêtements",
+  "Maison & Décoration",
+  "Beauté & Bien-être",
+  "Sport & Fitness",
+  "Cartes cadeaux",
+  "Alimentation & Boissons",
+  "Culture & Divertissement",
+  "Voyage & Hébergement",
+  "Automobile & Mobilité",
+  "Services & Abonnements",
+  "Téléphonie & Internet",
+  "Bricolage & Jardinage",
+  "Jeux & Jouets",
+  "Expériences & Loisirs",
 ];
 
 export default function RewardItemsPage() {
@@ -214,7 +223,7 @@ export default function RewardItemsPage() {
       const fd = new FormData();
       fd.append("file", file);
 
-      const res = await fetch(`${API_URL}/promotions/upload-image`, {
+      const res = await fetch(`${API_URL}/reward-items/upload-image`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: fd,
