@@ -99,9 +99,20 @@ function hasAccess(userRole: string | null, minRole: string, extraRoles: string[
 
 export function Navigation() {
   const pathname = usePathname();
-  const { role } = useCurrentUser();
+  const { role, loading } = useCurrentUser();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<string[]>(["Vue d'ensemble", "Catalogue", "Programme Fidélité", "Système"]);
+
+  // Attendre que le rôle soit chargé
+  if (loading) {
+    return (
+      <nav className="bg-white border-b border-gray-200">
+        <div className="px-6 py-3.5">
+          <div className="h-6 w-32 bg-gray-100 rounded animate-pulse" />
+        </div>
+      </nav>
+    );
+  }
 
   const toggleGroup = (title: string) => {
     setExpandedGroups((prev) =>
