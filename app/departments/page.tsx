@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Building, Plus, Pencil, Trash2, Search } from "lucide-react";
 import { format } from "date-fns";
 import { Header } from "@/components/Header";
@@ -30,30 +28,22 @@ interface Department {
 export default function DepartmentsPage() {
   const router = useRouter();
   const { isSuperAdmin, loading } = useCurrentUser();
+  const formRef = useRef<HTMLDivElement>(null);
 
   const [departments, setDepartments] = useState<Department[]>([]);
   const [filteredDepartments, setFilteredDepartments] = useState<Department[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showForm, setShowForm] = useState(false);
+  const [isFormVisible, setIsFormVisible] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-  });
+  const [formData, setFormData] = useState({ name: "", description: "" });
 
   useEffect(() => {
-    // Attendre que le chargement du rôle soit terminé
     if (loading) return;
-    
-    // Si pas SUPER_ADMIN, rediriger
     if (!isSuperAdmin) {
       router.push("/");
       return;
     }
-    
-    // Charger les départements
     fetchDepartments();
   }, [isSuperAdmin, loading, router]);
 
@@ -115,7 +105,10 @@ export default function DepartmentsPage() {
       description: department.description || "",
     });
     setEditingId(department.id);
-    setShowForm(true);
+    setIsFormVisible(true);
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   };
 
   const handleDelete = async (id: string) => {
@@ -138,10 +131,21 @@ export default function DepartmentsPage() {
   const resetForm = () => {
     setFormData({ name: "", description: "" });
     setEditingId(null);
-    setShowForm(false);
+    setIsFormVisible(false);
   };
 
-  // Afficher un loader pendant le chargement du rôle
+  const toggleForm = () => {
+    const newState = !isFormVisible;
+    setIsFormVisible(newState);
+    if (!newState) {
+      resetForm();
+    } else {
+      setTimeout(() => {
+        formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -154,7 +158,6 @@ export default function DepartmentsPage() {
     );
   }
 
-  // Si pas SUPER_ADMIN, ne rien afficher (la redirection est en cours)
   if (!isSuperAdmin) {
     return null;
   }
@@ -176,19 +179,15 @@ export default function DepartmentsPage() {
             </div>
           </div>
           <Button
-            onClick={() => {
-              setShowForm(!showForm);
-              if (!showForm) resetForm();
-            }}
+            onClick={toggleForm}
             className="gap-2 text-white"
             style={{ backgroundColor: VITOGAZ_GREEN }}
           >
             <Plus className="w-4 h-4" />
-            {showForm ? "Annuler" : "Nouveau Département"}
+            {isFormVisible ? "Annuler" : "Nouveau Département"}
           </Button>
         </div>
 
-        {/* Info Box */}
         <Card className="mb-6" style={{ borderColor: "#b2dbd8", backgroundColor: "#f0faf9" }}>
           <CardContent className="pt-6">
             <p className="text-sm text-gray-700">
@@ -198,58 +197,58 @@ export default function DepartmentsPage() {
           </CardContent>
         </Card>
 
-        {/* Formulaire */}
-        {showForm && (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>
-                {editingId ? "Modifier le Département" : "Nouveau Département"}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="name">Nom du département *</Label>
-                    <Input
-                      id="name"
-                      required
-                      maxLength={100}
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="Ex: Marketing, IT, Ventes..."
-                    />
+        {isFormVisible && (
+          <div ref={formRef}>
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>
+                  {editingId ? "Modifier le Département" : "Nouveau Département"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="name">Nom du département *</Label>
+                      <Input
+                        id="name"
+                        required
+                        maxLength={100}
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        placeholder="Ex: Marketing, IT, Ventes..."
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="description">Description (optionnel)</Label>
+                      <Input
+                        id="description"
+                        value={formData.description}
+                        onChange={(e) =>
+                          setFormData({ ...formData, description: e.target.value })
+                        }
+                        placeholder="Description courte du département"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <Label htmlFor="description">Description (optionnel)</Label>
-                    <Input
-                      id="description"
-                      value={formData.description}
-                      onChange={(e) =>
-                        setFormData({ ...formData, description: e.target.value })
-                      }
-                      placeholder="Description courte du département"
-                    />
+                  <div className="flex gap-3">
+                    <Button
+                      type="submit"
+                      className="text-white"
+                      style={{ backgroundColor: VITOGAZ_GREEN }}
+                    >
+                      {editingId ? "Mettre à jour" : "Créer"}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={resetForm}>
+                      Annuler
+                    </Button>
                   </div>
-                </div>
-                <div className="flex gap-3">
-                  <Button
-                    type="submit"
-                    className="text-white"
-                    style={{ backgroundColor: VITOGAZ_GREEN }}
-                  >
-                    {editingId ? "Mettre à jour" : "Créer"}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={resetForm}>
-                    Annuler
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
-        {/* Search */}
         <Card className="mb-6">
           <CardContent className="pt-6">
             <div className="relative">
@@ -264,7 +263,6 @@ export default function DepartmentsPage() {
           </CardContent>
         </Card>
 
-        {/* Table */}
         <Card>
           <Table>
             <TableHeader>
@@ -336,4 +334,3 @@ export default function DepartmentsPage() {
     </div>
   );
 }
-// Force rebuild
