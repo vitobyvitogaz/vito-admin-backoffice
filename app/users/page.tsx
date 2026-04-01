@@ -22,6 +22,12 @@ import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 const VITOGAZ_GREEN = "#008B7F";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://vito-backend-supabase.onrender.com/api/v1';
 
+interface Department {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
 interface AppUser {
   id: string;
   email: string;
@@ -31,9 +37,10 @@ interface AppUser {
   status: string;
   created_at: string;
   updated_at: string;
+  department: Department | null;
 }
 
-type SortColumn = "email" | "role" | "status" | "created_at" | null;
+type SortColumn = "email" | "first_name" | "last_name" | "department" | "role" | "status" | "created_at" | null;
 type SortDirection = "asc" | "desc";
 
 export default function UsersPage() {
@@ -42,6 +49,7 @@ export default function UsersPage() {
 
   const [users, setUsers]                   = useState<AppUser[]>([]);
   const [filteredUsers, setFilteredUsers]   = useState<AppUser[]>([]);
+  const [departments, setDepartments]       = useState<Department[]>([]);
   const [loading, setLoading]               = useState(true);
   const [searchQuery, setSearchQuery]       = useState("");
   const [showForm, setShowForm]             = useState(false);
@@ -53,10 +61,13 @@ export default function UsersPage() {
   const [sortDirection, setSortDirection]   = useState<SortDirection>("asc");
 
   const [formData, setFormData] = useState({
-    email: "", first_name: "", last_name: "", role: "VIEWER", password: "",
+    email: "", first_name: "", last_name: "", department_id: "", role: "VIEWER", password: "",
   });
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => { 
+    fetchUsers(); 
+    fetchDepartments();
+  }, []);
 
   useEffect(() => {
     if (searchQuery.trim() === "") { setFilteredUsers(users); return; }
@@ -65,7 +76,8 @@ export default function UsersPage() {
       u.email.toLowerCase().includes(query) ||
       u.role.toLowerCase().includes(query) ||
       (u.first_name && u.first_name.toLowerCase().includes(query)) ||
-      (u.last_name && u.last_name.toLowerCase().includes(query))
+      (u.last_name && u.last_name.toLowerCase().includes(query)) ||
+      (u.department && u.department.name.toLowerCase().includes(query))
     ));
   }, [searchQuery, users]);
 
@@ -82,14 +94,24 @@ export default function UsersPage() {
     }
   };
 
+  const fetchDepartments = async () => {
+    try {
+      const data = await apiGet<Department[]>('/departments');
+      setDepartments(data || []);
+    } catch (error) {
+      toast({ title: "Erreur", description: "Impossible de charger les départements", variant: "destructive" });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canManageUsers) return;
     try {
       if (editingId) {
         await apiPatch(`/users/${editingId}`, {
-          first_name: formData.first_name || null,
-          last_name:  formData.last_name  || null,
+          first_name: formData.first_name,
+          last_name:  formData.last_name,
+          department_id: formData.department_id,
           role:       formData.role,
         });
         toast({ title: "Succès !", description: "Utilisateur modifié" });
@@ -97,8 +119,9 @@ export default function UsersPage() {
         await apiPost('/users', {
           email:      formData.email,
           password:   formData.password,
-          first_name: formData.first_name || null,
-          last_name:  formData.last_name  || null,
+          first_name: formData.first_name,
+          last_name:  formData.last_name,
+          department_id: formData.department_id,
           role:       formData.role,
         });
         toast({ title: "Succès !", description: "Utilisateur créé" });
@@ -119,12 +142,18 @@ export default function UsersPage() {
 
   const handleEdit = (user: AppUser) => {
     if (!canManageUsers) return;
-    setFormData({ email: user.email, first_name: user.first_name || "", last_name: user.last_name || "", role: user.role, password: "" });
+    setFormData({ 
+      email: user.email, 
+      first_name: user.first_name || "", 
+      last_name: user.last_name || "", 
+      department_id: user.department?.id || "",
+      role: user.role, 
+      password: "" 
+    });
     setEditingId(user.id);
     setShowForm(true);
     setShowResetForm(null);
     
-    // Scroll automatique vers le formulaire
     setTimeout(() => {
       formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 100);
@@ -166,7 +195,7 @@ export default function UsersPage() {
   };
 
   const resetForm = () => {
-    setFormData({ email: "", first_name: "", last_name: "", role: "VIEWER", password: "" });
+    setFormData({ email: "", first_name: "", last_name: "", department_id: "", role: "VIEWER", password: "" });
     setEditingId(null);
     setShowForm(false);
   };
@@ -191,6 +220,18 @@ export default function UsersPage() {
         case "email":
           aValue = a.email.toLowerCase();
           bValue = b.email.toLowerCase();
+          break;
+        case "first_name":
+          aValue = (a.first_name || "").toLowerCase();
+          bValue = (b.first_name || "").toLowerCase();
+          break;
+        case "last_name":
+          aValue = (a.last_name || "").toLowerCase();
+          bValue = (b.last_name || "").toLowerCase();
+          break;
+        case "department":
+          aValue = a.department?.name.toLowerCase() || "";
+          bValue = b.department?.name.toLowerCase() || "";
           break;
         case "role":
           aValue = a.role;
@@ -260,11 +301,6 @@ export default function UsersPage() {
     return descriptions[role] || "";
   };
 
-  const getDisplayName = (user: AppUser) => {
-    if (user.first_name || user.last_name) return `${user.first_name || ''} ${user.last_name || ''}`.trim();
-    return null;
-  };
-
   const sortedUsers = getSortedUsers();
 
   return (
@@ -332,14 +368,24 @@ export default function UsersPage() {
                       </div>
                     )}
                     <div>
-                      <Label htmlFor="first_name">Prénom</Label>
-                      <Input id="first_name" value={formData.first_name}
+                      <Label htmlFor="first_name">Prénom *</Label>
+                      <Input id="first_name" required value={formData.first_name}
                         onChange={e => setFormData({ ...formData, first_name: e.target.value })} placeholder="Jean" />
                     </div>
                     <div>
-                      <Label htmlFor="last_name">Nom</Label>
-                      <Input id="last_name" value={formData.last_name}
+                      <Label htmlFor="last_name">Nom *</Label>
+                      <Input id="last_name" required value={formData.last_name}
                         onChange={e => setFormData({ ...formData, last_name: e.target.value })} placeholder="Rakoto" />
+                    </div>
+                    <div>
+                      <Label htmlFor="department_id">Département *</Label>
+                      <select id="department_id" required className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={formData.department_id} onChange={e => setFormData({ ...formData, department_id: e.target.value })}>
+                        <option value="">Sélectionner un département</option>
+                        {departments.map(dept => (
+                          <option key={dept.id} value={dept.id}>{dept.name}</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <Label htmlFor="role">Rôle *</Label>
@@ -354,7 +400,7 @@ export default function UsersPage() {
                       </select>
                     </div>
                     {!editingId && (
-                      <div>
+                      <div className="md:col-span-2">
                         <Label htmlFor="password">Mot de passe *</Label>
                         <Input id="password" type="password" required value={formData.password}
                           onChange={e => setFormData({ ...formData, password: e.target.value })} placeholder="Minimum 8 caractères" />
@@ -402,7 +448,7 @@ export default function UsersPage() {
           <CardContent className="pt-6">
             <div className="relative">
               <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-              <Input placeholder="Rechercher par email, nom ou rôle..." className="pl-10"
+              <Input placeholder="Rechercher par email, nom, département ou rôle..." className="pl-10"
                 value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
             </div>
           </CardContent>
@@ -418,8 +464,35 @@ export default function UsersPage() {
                   onClick={() => handleSort("email")}
                 >
                   <div className="flex items-center">
-                    Utilisateur
+                    Email
                     <SortIcon column="email" />
+                  </div>
+                </TableHead>
+                <TableHead 
+                  className="cursor-pointer select-none hover:bg-gray-50"
+                  onClick={() => handleSort("first_name")}
+                >
+                  <div className="flex items-center">
+                    Prénom
+                    <SortIcon column="first_name" />
+                  </div>
+                </TableHead>
+                <TableHead 
+                  className="cursor-pointer select-none hover:bg-gray-50"
+                  onClick={() => handleSort("last_name")}
+                >
+                  <div className="flex items-center">
+                    Nom
+                    <SortIcon column="last_name" />
+                  </div>
+                </TableHead>
+                <TableHead 
+                  className="cursor-pointer select-none hover:bg-gray-50"
+                  onClick={() => handleSort("department")}
+                >
+                  <div className="flex items-center">
+                    Département
+                    <SortIcon column="department" />
                   </div>
                 </TableHead>
                 <TableHead 
@@ -455,17 +528,15 @@ export default function UsersPage() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={canManageUsers ? 6 : 5} className="text-center py-8">Chargement...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={canManageUsers ? 9 : 8} className="text-center py-8">Chargement...</TableCell></TableRow>
               ) : sortedUsers.length === 0 ? (
-                <TableRow><TableCell colSpan={canManageUsers ? 6 : 5} className="text-center py-8">Aucun utilisateur trouvé</TableCell></TableRow>
+                <TableRow><TableCell colSpan={canManageUsers ? 9 : 8} className="text-center py-8">Aucun utilisateur trouvé</TableCell></TableRow>
               ) : sortedUsers.map(user => (
                 <TableRow key={user.id}>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span className="font-medium text-sm">{user.email}</span>
-                      {getDisplayName(user) && <span className="text-xs text-gray-400">{getDisplayName(user)}</span>}
-                    </div>
-                  </TableCell>
+                  <TableCell className="font-medium text-sm">{user.email}</TableCell>
+                  <TableCell className="text-sm">{user.first_name || "—"}</TableCell>
+                  <TableCell className="text-sm">{user.last_name || "—"}</TableCell>
+                  <TableCell className="text-sm text-gray-600">{user.department?.name || "—"}</TableCell>
                   <TableCell>
                     <span className={`px-2 py-1 text-xs rounded-full inline-flex items-center gap-1 ${getRoleColor(user.role)}`}>
                       {getRoleIcon(user.role)}{user.role}

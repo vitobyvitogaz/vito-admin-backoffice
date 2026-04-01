@@ -183,8 +183,7 @@ function EvolutionCard({ title, entity, color, period, onPeriodChange, data, loa
 export default function DashboardPage() {
   const router = useRouter();
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  //const { canWrite, canDelete } = useCurrentUser();
-  const { canWrite, canDelete, isSuperAdmin } = useCurrentUser();
+  const { canWrite, canDelete, isSuperAdmin, isGestionnairePromo } = useCurrentUser();
 
   const [summary, setSummary] = useState<Summary>({
     resellers: 0, deliveryCompanies: 0, promotions: 0,
@@ -234,12 +233,19 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push("/login"); return; }
+    
+    // Redirection pour GESTIONNAIRE_PROMO
+    if (isGestionnairePromo) {
+      router.push("/scans");
+      return;
+    }
+    
     fetchSummary();
     fetchQrScans();
     (["resellers", "delivery-companies", "promotions", "qr-scans"] as EntityKey[]).forEach(
       (e) => fetchEvolution(e, "30")
     );
-  }, [router, fetchSummary, fetchQrScans, fetchEvolution]);
+  }, [router, fetchSummary, fetchQrScans, fetchEvolution, isGestionnairePromo]);
 
   const handlePeriodChange = (entity: EntityKey, days: PeriodKey) => {
     setPeriods((prev) => ({ ...prev, [entity]: days }));

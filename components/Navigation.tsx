@@ -31,7 +31,7 @@ const GasBottleIcon = ({ className, strokeWidth }: { className?: string; strokeW
 );
 
 const baseNavItems = [
-  { href: "/",                   label: "Dashboard",      minRole: "VIEWER",      extraRoles: ["GESTIONNAIRE_PROMO"], icon: LayoutDashboard },
+  { href: "/",                   label: "Dashboard",      minRole: "VIEWER",      extraRoles: [],                     icon: LayoutDashboard },
   { href: "/resellers",          label: "Revendeurs",     minRole: "VIEWER",      extraRoles: [],                     icon: Building2 },
   { href: "/products",           label: "Produits",       minRole: "VIEWER",      extraRoles: [],                     icon: GasBottleIcon },
   { href: "/delivery-companies", label: "Livraisons",     minRole: "VIEWER",      extraRoles: [],                     icon: Truck },
@@ -40,6 +40,7 @@ const baseNavItems = [
   { href: "/scans",              label: "Participants",   minRole: "ADMIN",       extraRoles: ["GESTIONNAIRE_PROMO"], icon: QrCode },
   { href: "/points-exchange",    label: "Échanges",       minRole: "ADMIN",       extraRoles: ["GESTIONNAIRE_PROMO"], icon: Gift },
   { href: "/notifications",      label: "Notifications",  minRole: "ADMIN",       extraRoles: [],                     icon: Bell },
+  { href: "/departments",        label: "Départements",   minRole: "SUPER_ADMIN", extraRoles: [],                     icon: Building2 },
   { href: "/users",              label: "Utilisateurs",   minRole: "ADMIN",       extraRoles: [],                     icon: Users },
   { href: "/audit",              label: "Journal",        minRole: "SUPER_ADMIN", extraRoles: [],                     icon: ScrollText },
 ];
