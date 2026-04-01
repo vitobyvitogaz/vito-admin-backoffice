@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
-import { LogOut, KeyRound, ChevronDown, Shield, ShieldCheck, Eye, User } from "lucide-react";
+import { LogOut, KeyRound, ChevronDown, Shield, ShieldCheck, Eye, User, Star } from "lucide-react";
 import { removeUserSession } from "@/lib/auth";
 import { toast } from "@/lib/use-toast";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
@@ -28,6 +28,7 @@ const ROLE_LABELS: Record<string, string> = {
   ADMIN: "Administrateur",
   EDITOR: "Éditeur",
   VIEWER: "Lecteur",
+  GESTIONNAIRE_PROMO: "Gestionnaire Promo",
   API_CLIENT: "Client API",
 };
 
@@ -36,6 +37,7 @@ const ROLE_COLORS: Record<string, { bg: string; text: string }> = {
   ADMIN: { bg: "bg-orange-100", text: "text-orange-700" },
   EDITOR: { bg: "bg-blue-100", text: "text-blue-700" },
   VIEWER: { bg: "bg-gray-100", text: "text-gray-600" },
+  GESTIONNAIRE_PROMO: { bg: "bg-violet-100", text: "text-violet-700" },
   API_CLIENT: { bg: "bg-purple-100", text: "text-purple-700" },
 };
 
@@ -44,6 +46,7 @@ const ROLE_ICONS: Record<string, React.ReactNode> = {
   ADMIN: <Shield className="w-3 h-3" />,
   EDITOR: <KeyRound className="w-3 h-3" />,
   VIEWER: <Eye className="w-3 h-3" />,
+  GESTIONNAIRE_PROMO: <Star className="w-3 h-3" />,
   API_CLIENT: <User className="w-3 h-3" />,
 };
 
