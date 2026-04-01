@@ -135,39 +135,49 @@ export function Navigation() {
 
   return (
     <>
-      {/* DESKTOP NAVIGATION */}
+      {/* DESKTOP NAVIGATION - Option B avec titres de groupes */}
       <nav className="hidden lg:block bg-white border-b border-gray-200">
         <div className="px-6 overflow-x-auto scrollbar-hide">
-          <div className="flex gap-1 min-w-max">
+          <div className="flex gap-6 min-w-max">
             {accessibleGroups.map((group, groupIndex) => (
-              <div key={group.title} className="flex items-center">
-                {group.items.map((item) => {
-                  const isActive = pathname === item.href;
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={cn(
-                        "flex items-center gap-2 px-3 py-3.5 text-sm font-medium border-b-2 transition-all duration-200 whitespace-nowrap",
-                        isActive
-                          ? "border-b-2"
-                          : "text-gray-500 border-transparent hover:text-gray-800 hover:border-gray-300 hover:bg-gray-50 rounded-t-md"
-                      )}
-                      style={
-                        isActive
-                          ? { color: VITOGAZ_GREEN, borderBottomColor: VITOGAZ_GREEN, backgroundColor: "#f0faf9", borderRadius: "6px 6px 0 0" }
-                          : {}
-                      }
-                    >
-                      <Icon className="w-4 h-4 flex-shrink-0" strokeWidth={isActive ? 2.5 : 1.8} />
-                      <span>{item.label}</span>
-                    </Link>
-                  );
-                })}
-                {/* Séparateur visuel entre groupes */}
+              <div key={group.title} className="flex items-end gap-1">
+                {/* Groupe avec titre */}
+                <div className="flex flex-col">
+                  {/* Titre du groupe */}
+                  <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-3 pb-1">
+                    {group.title}
+                  </span>
+                  {/* Items du groupe */}
+                  <div className="flex gap-1">
+                    {group.items.map((item) => {
+                      const isActive = pathname === item.href;
+                      const Icon = item.icon;
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className={cn(
+                            "flex items-center gap-2 px-3 py-3.5 text-sm font-medium border-b-2 transition-all duration-200 whitespace-nowrap",
+                            isActive
+                              ? "border-b-2"
+                              : "text-gray-500 border-transparent hover:text-gray-800 hover:border-gray-300 hover:bg-gray-50 rounded-t-md"
+                          )}
+                          style={
+                            isActive
+                              ? { color: VITOGAZ_GREEN, borderBottomColor: VITOGAZ_GREEN, backgroundColor: "#f0faf9", borderRadius: "6px 6px 0 0" }
+                              : {}
+                          }
+                        >
+                          <Icon className="w-4 h-4 flex-shrink-0" strokeWidth={isActive ? 2.5 : 1.8} />
+                          <span>{item.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+                {/* Séparateur vertical entre groupes */}
                 {groupIndex < accessibleGroups.length - 1 && (
-                  <div className="h-8 w-px bg-gray-200 mx-2" />
+                  <div className="h-10 w-px bg-gray-200 mb-1" />
                 )}
               </div>
             ))}
@@ -175,10 +185,9 @@ export function Navigation() {
         </div>
       </nav>
 
-      {/* MOBILE NAVIGATION */}
+      {/* MOBILE NAVIGATION - Hamburger sans texte */}
       <nav className="lg:hidden bg-white border-b border-gray-200">
-        <div className="flex items-center justify-between px-4 py-3">
-          <span className="text-sm font-semibold text-gray-700">Menu</span>
+        <div className="flex items-center justify-end px-4 py-3">
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="p-2 rounded-md hover:bg-gray-100 transition-colors"
