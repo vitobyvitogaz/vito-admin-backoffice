@@ -48,6 +48,7 @@ export default function ScansAdminPage() {
   const [searchInput, setSearchInput] = useState("");
   const [promos, setPromos]   = useState<Promo[]>([]);
   const [promoFilter, setPromoFilter] = useState("");
+  const [periodFilter, setPeriodFilter] = useState("all");
 
   const [sortColumn, setSortColumn] = useState<SortKey | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
@@ -78,7 +79,7 @@ export default function ScansAdminPage() {
   }, []);
 
   const handleSearch = () => { setPage(1); setSearch(searchInput); };
-  const handleReset  = () => { setSearchInput(""); setSearch(""); setPromoFilter(""); setPage(1); };
+  const handleReset  = () => { setSearchInput(""); setSearch(""); setPromoFilter(""); setPeriodFilter("all"); setPage(1); };
 
   const handleSort = (col: SortKey) => {
     if (sortColumn !== col) {
@@ -94,6 +95,14 @@ export default function ScansAdminPage() {
 
   const uniquePhones = new Set(participations.map(p => p.phone)).size;
 
+  // Filtre période
+  const filteredByPeriod = periodFilter === "all" ? participations : participations.filter(p => {
+    const scanDate = new Date(p.scanned_at);
+    const limitDate = new Date();
+    limitDate.setDate(limitDate.getDate() - parseInt(periodFilter));
+    return scanDate >= limitDate;
+  });
+
   const SortIcon = ({ column }: { column: SortKey }) => {
     if (sortColumn !== column) {
       return <ArrowUpDown className="w-3.5 h-3.5 text-gray-400 ml-1 inline" />;
@@ -104,7 +113,7 @@ export default function ScansAdminPage() {
     return <ArrowDown className="w-3.5 h-3.5 ml-1 inline" style={{ color: VITOGAZ_GREEN }} />;
   };
 
-  const sortedParticipations = [...participations].sort((a, b) => {
+  const sortedParticipations = [...filteredByPeriod].sort((a, b) => {
     if (!sortColumn || !sortDirection) return 0;
 
     let aValue: any;
@@ -155,11 +164,12 @@ export default function ScansAdminPage() {
   // ── Export CSV ───────────────────────────────────────────────────────────
   const handleExport = () => {
     if (participations.length === 0) { toast({ title: "Aucune donnée à exporter" }); return; }
-    const headers = ["Nom", "Téléphone", "Email", "Code promo", "Promotion", "Points", "Date scan"];
+    const headers = ["Nom", "Téléphone", "Email", "CIN", "Code promo", "Promotion", "Points", "Date scan"];
     const rows = participations.map(p => [
       p.name,
       p.phone,
       p.email || "",
+      p.cin_number || "",
       p.promo_code,
       p.promotions?.title || "",
       String(p.points_earned),
@@ -234,6 +244,17 @@ export default function ScansAdminPage() {
               </div>
               <select
                 className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm min-w-[200px]"
+                value={periodFilter}
+                onChange={e => setPeriodFilter(e.target.value)}
+              >
+                <option value="all">Toute période</option>
+                <option value="7">7 derniers jours</option>
+                <option value="30">30 derniers jours</option>
+                <option value="90">90 derniers jours</option>
+                <option value="365">1 an</option>
+              </select>
+              <select
+                className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm min-w-[200px]"
                 value={promoFilter}
                 onChange={e => { setPromoFilter(e.target.value); setPage(1); }}
               >
@@ -245,7 +266,7 @@ export default function ScansAdminPage() {
               <Button onClick={handleSearch} style={{ backgroundColor: VITOGAZ_GREEN }} className="text-white gap-2">
                 <Filter className="w-4 h-4" /> Filtrer
               </Button>
-              {(search || promoFilter) && (
+              {(search || promoFilter || periodFilter !== "all") && (
                 <Button variant="outline" onClick={handleReset} className="gap-2">
                   <X className="w-4 h-4" /> Réinitialiser
                 </Button>
@@ -257,10 +278,8 @@ export default function ScansAdminPage() {
         {/* Stats rapides */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           {[
-            //{ label: "Total participants", value: total.toLocaleString(), icon: Users, color: "text-teal-700", bg: "bg-teal-50" },
             { label: "Total participations", value: total.toLocaleString(), icon: Users, color: "text-teal-700", bg: "bg-teal-50" },
             { label: "Total participants", value: uniquePhones.toLocaleString(), icon: Users, color: "text-blue-700", bg: "bg-blue-50" },
-            //{ label: "Sur cette page", value: participations.length.toLocaleString(), icon: QrCode, color: "text-violet-600", bg: "bg-violet-50" },
             { label: "Avec points", value: participations.filter(p => p.points_earned > 0).length.toLocaleString(), icon: Star, color: "text-amber-600", bg: "bg-amber-50" },
             { label: "Total points distribués", value: totalPointsDistributed.toLocaleString(), icon: Star, color: "text-orange-600", bg: "bg-orange-50" },
           ].map(card => {

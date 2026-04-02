@@ -45,6 +45,7 @@ export default function PointsExchangePage() {
   const [filter, setFilter]         = useState<StatusFilter>("all");
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ id: string; action: "validate" | "reject"; name: string } | null>(null);
+  const [adminNote, setAdminNote] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
 
   const [sortColumn, setSortColumn] = useState<SortKey | null>(null);
@@ -54,7 +55,6 @@ export default function PointsExchangePage() {
     setLoading(true);
     try {
       const params = filter !== "all" ? `?status=${filter}` : "";
-      // const data   = await apiGet<Exchange[]>(`/scan/admin/exchanges${params}`);
       const data = await apiGet<Exchange[]>(`/points-exchange${params}`);
       setExchanges(data || []);
     } catch (e: any) {
@@ -67,8 +67,9 @@ export default function PointsExchangePage() {
   const handleValidate = async (id: string) => {
     setProcessingId(id);
     setConfirmAction(null);
+    setAdminNote("");
     try {
-      await apiPatch(`/scan/admin/exchanges/${id}/validate`, {});
+      await apiPatch(`/scan/admin/exchanges/${id}/validate`, { admin_notes: adminNote || null });
       toast({ title: "Échange validé !", description: "Les points ont été déduits du solde." });
       fetchData();
     } catch (e: any) {
@@ -80,9 +81,10 @@ export default function PointsExchangePage() {
     setProcessingId(id);
     setConfirmAction(null);
     try {
-      await apiPatch(`/scan/admin/exchanges/${id}/reject`, {});
+      await apiPatch(`/scan/admin/exchanges/${id}/reject`, { admin_notes: adminNote || null });
       toast({ title: "Échange rejeté", description: "La demande a été refusée." });
       fetchData();
+      setAdminNote("");
     } catch (e: any) {
       toast({ title: "Erreur", description: e.message, variant: "destructive" });
     } finally { setProcessingId(null); }
@@ -259,22 +261,50 @@ export default function PointsExchangePage() {
         {/* Dialogue de confirmation */}
         {confirmAction && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
               <h3 className="text-base font-bold mb-2">
                 {confirmAction.action === "validate" ? "Valider cet échange ?" : "Rejeter cet échange ?"}
               </h3>
-              <p className="text-sm text-gray-600 mb-5">
+              <p className="text-sm text-gray-600 mb-4">
                 {confirmAction.action === "validate"
                   ? `Les points seront déduits du solde de ${confirmAction.name}. Cette action est irréversible.`
                   : `La demande de ${confirmAction.name} sera refusée.`}
               </p>
+
+              {/* Champ note admin */}
+              <div className="mb-5">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Note explicative {confirmAction.action === "reject" && <span className="text-red-500">*</span>}
+                </label>
+                <textarea
+                  value={adminNote}
+                  onChange={(e) => setAdminNote(e.target.value)}
+                  placeholder={
+                    confirmAction.action === "reject"
+                      ? "Expliquez pourquoi cette demande est refusée (obligatoire)"
+                      : "Note optionnelle pour le client (optionnel)"
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  rows={3}
+                />
+                {confirmAction.action === "reject" && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Le client verra ce message dans son historique
+                  </p>
+                )}
+              </div>
+
               <div className="flex gap-3">
-                <Button onClick={() => confirmAction.action === "validate" ? handleValidate(confirmAction.id) : handleReject(confirmAction.id)}
+                <Button 
+                  onClick={() => confirmAction.action === "validate" ? handleValidate(confirmAction.id) : handleReject(confirmAction.id)}
                   className="flex-1 text-white gap-2"
+                  disabled={confirmAction.action === "reject" && !adminNote.trim()}
                   style={{ backgroundColor: confirmAction.action === "validate" ? VITOGAZ_GREEN : "#ef4444" }}>
                   {confirmAction.action === "validate" ? <><Check className="w-4 h-4" /> Valider</> : <><X className="w-4 h-4" /> Rejeter</>}
                 </Button>
-                <Button variant="outline" onClick={() => setConfirmAction(null)} className="flex-1">Annuler</Button>
+                <Button variant="outline" onClick={() => { setConfirmAction(null); setAdminNote(""); }} className="flex-1">
+                  Annuler
+                </Button>
               </div>
             </div>
           </div>
@@ -351,7 +381,6 @@ export default function PointsExchangePage() {
                     <TableCell className="text-xs text-gray-500 whitespace-nowrap">{fmt(ex.requested_at)}</TableCell>
                     {canManageScans && (
                       <TableCell className="text-right">
-                        {/* {ex.status === "pending" ? ( */}
                         {ex.status?.toLowerCase() === "pending" ? (
                           <div className="flex justify-end gap-2">
                             <Button size="sm" className="gap-1.5 text-white"
