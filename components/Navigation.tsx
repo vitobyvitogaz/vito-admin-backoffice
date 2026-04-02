@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -18,7 +18,9 @@ import {
   Menu,
   X,
   ChevronDown,
+  ChevronUp,
   Package,
+  Trophy,
 } from "lucide-react";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 
@@ -72,6 +74,7 @@ const navGroups: NavGroup[] = [
       { href: "/scans", label: "Participants", minRole: "ADMIN", extraRoles: ["GESTIONNAIRE_PROMO"], excludedRoles: [], icon: QrCode },
       { href: "/points-exchange", label: "Échanges", minRole: "ADMIN", extraRoles: ["GESTIONNAIRE_PROMO"], excludedRoles: [], icon: Gift },
       { href: "/reward-items", label: "Articles Cadeaux", minRole: "ADMIN", extraRoles: ["GESTIONNAIRE_PROMO"], excludedRoles: [], icon: Package },
+      { href: "/leaderboard", label: "Palmarès", minRole: "ADMIN", extraRoles: ["GESTIONNAIRE_PROMO"], excludedRoles: [], icon: Trophy },
     ],
   },
   {
@@ -102,6 +105,9 @@ export function Navigation() {
   const { role, loading } = useCurrentUser();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<string[]>(["Vue d'ensemble", "Catalogue", "Programme Fidélité", "Système"]);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const drawerScrollRef = useRef<HTMLDivElement>(null);
 
   // Attendre que le rôle soit chargé
   if (loading) {
@@ -132,6 +138,28 @@ export function Navigation() {
   };
 
   const accessibleGroups = filterAccessibleGroups();
+
+  // Gérer l'affichage des flèches de scroll
+  const handleScroll = () => {
+    if (!drawerScrollRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = drawerScrollRef.current;
+    setShowScrollTop(scrollTop > 20);
+    setShowScrollBottom(scrollTop + clientHeight < scrollHeight - 20);
+  };
+
+  // Smooth scroll vers haut/bas
+  const scrollTo = (direction: "top" | "bottom") => {
+    if (!drawerScrollRef.current) return;
+    const scrollAmount = direction === "top" ? -200 : 200;
+    drawerScrollRef.current.scrollBy({ top: scrollAmount, behavior: "smooth" });
+  };
+
+  // Vérifier scroll au montage et à l'ouverture
+  useEffect(() => {
+    if (mobileMenuOpen && drawerScrollRef.current) {
+      handleScroll();
+    }
+  }, [mobileMenuOpen, expandedGroups]);
 
   return (
     <>
@@ -211,9 +239,9 @@ export function Navigation() {
             />
 
             {/* Drawer */}
-            <div className="fixed top-0 right-0 bottom-0 w-80 max-w-[85vw] bg-white z-50 shadow-2xl overflow-y-auto">
+            <div className="fixed top-0 right-0 bottom-0 w-80 max-w-[85vw] bg-white z-50 shadow-2xl flex flex-col">
               {/* Header */}
-              <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
                 <h2 className="text-lg font-bold" style={{ color: VITOGAZ_GREEN }}>
                   Navigation
                 </h2>
@@ -225,8 +253,42 @@ export function Navigation() {
                 </button>
               </div>
 
-              {/* Menu Groups */}
-              <div className="py-2">
+              {/* Scroll Up Button */}
+              {showScrollTop && (
+                <button
+                  onClick={() => scrollTo("top")}
+                  className="flex-shrink-0 w-full py-2 flex items-center justify-center bg-gradient-to-b from-white to-transparent hover:bg-gray-50 transition-colors border-b border-gray-100"
+                  style={{ color: VITOGAZ_GREEN }}
+                >
+                  <ChevronUp className="w-5 h-5" strokeWidth={2.5} />
+                </button>
+              )}
+
+              {/* Menu Groups - Scrollable avec scrollbar fine */}
+              <div
+                ref={drawerScrollRef}
+                onScroll={handleScroll}
+                className="flex-1 overflow-y-auto py-2"
+                style={{
+                  scrollbarWidth: "thin",
+                  scrollbarColor: `${VITOGAZ_GREEN}20 transparent`,
+                }}
+              >
+                <style jsx>{`
+                  div::-webkit-scrollbar {
+                    width: 6px;
+                  }
+                  div::-webkit-scrollbar-track {
+                    background: transparent;
+                  }
+                  div::-webkit-scrollbar-thumb {
+                    background: ${VITOGAZ_GREEN}20;
+                    border-radius: 3px;
+                  }
+                  div::-webkit-scrollbar-thumb:hover {
+                    background: ${VITOGAZ_GREEN}40;
+                  }
+                `}</style>
                 {accessibleGroups.map((group) => {
                   const isExpanded = expandedGroups.includes(group.title);
                   return (
@@ -281,6 +343,17 @@ export function Navigation() {
                   );
                 })}
               </div>
+
+              {/* Scroll Down Button */}
+              {showScrollBottom && (
+                <button
+                  onClick={() => scrollTo("bottom")}
+                  className="flex-shrink-0 w-full py-2 flex items-center justify-center bg-gradient-to-t from-white to-transparent hover:bg-gray-50 transition-colors border-t border-gray-100"
+                  style={{ color: VITOGAZ_GREEN }}
+                >
+                  <ChevronDown className="w-5 h-5" strokeWidth={2.5} />
+                </button>
+              )}
             </div>
           </>
         )}
