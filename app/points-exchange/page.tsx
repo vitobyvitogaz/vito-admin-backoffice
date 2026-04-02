@@ -54,7 +54,8 @@ export default function PointsExchangePage() {
     setLoading(true);
     try {
       const params = filter !== "all" ? `?status=${filter}` : "";
-      const data   = await apiGet<Exchange[]>(`/scan/admin/exchanges${params}`);
+      // const data   = await apiGet<Exchange[]>(`/scan/admin/exchanges${params}`);
+      const data = await apiGet<Exchange[]>(`/points-exchange${params}`);
       setExchanges(data || []);
     } catch (e: any) {
       toast({ title: "Erreur", description: e.message || "Chargement impossible", variant: "destructive" });
@@ -350,7 +351,8 @@ export default function PointsExchangePage() {
                     <TableCell className="text-xs text-gray-500 whitespace-nowrap">{fmt(ex.requested_at)}</TableCell>
                     {canManageScans && (
                       <TableCell className="text-right">
-                        {ex.status === "pending" ? (
+                        {/* {ex.status === "pending" ? ( */}
+                        {ex.status?.toLowerCase() === "pending" ? (
                           <div className="flex justify-end gap-2">
                             <Button size="sm" className="gap-1.5 text-white"
                               style={{ backgroundColor: VITOGAZ_GREEN }}

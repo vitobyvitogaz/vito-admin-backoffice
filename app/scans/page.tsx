@@ -28,11 +28,12 @@ interface Participation {
   scanned_at: string;
   ip_address: string | null;
   promotions: { title: string } | null;
+  cin_number: string | null;
 }
 
 interface Promo { id: string; title: string; promo_code: string | null }
 
-type SortKey = "name" | "phone" | "email" | "promo_code" | "promotion" | "points_earned" | "scanned_at";
+type SortKey = "name" | "phone" | "email" | "cin_number" | "promo_code" | "promotion" | "points_earned" | "scanned_at";
 
 const PAGE_SIZE = 50;
 
@@ -91,6 +92,8 @@ export default function ScansAdminPage() {
     }
   };
 
+  const uniquePhones = new Set(participations.map(p => p.phone)).size;
+
   const SortIcon = ({ column }: { column: SortKey }) => {
     if (sortColumn !== column) {
       return <ArrowUpDown className="w-3.5 h-3.5 text-gray-400 ml-1 inline" />;
@@ -119,6 +122,10 @@ export default function ScansAdminPage() {
       case "email":
         aValue = (a.email || "").toLowerCase();
         bValue = (b.email || "").toLowerCase();
+        break;
+      case "cin_number":
+        aValue = (a.cin_number || "").toLowerCase();
+        bValue = (b.cin_number || "").toLowerCase();
         break;
       case "promo_code":
         aValue = a.promo_code.toLowerCase();
@@ -174,6 +181,7 @@ export default function ScansAdminPage() {
     { key: "name", label: "Nom" },
     { key: "phone", label: "Téléphone" },
     { key: "email", label: "Email" },
+    { key: "cin_number", label: "CIN" },
     { key: "promotion", label: "Promotion" },
     { key: "promo_code", label: "Code" },
     { key: "points_earned", label: "Points" },
@@ -245,12 +253,14 @@ export default function ScansAdminPage() {
             </div>
           </CardContent>
         </Card>
-
+        
         {/* Stats rapides */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           {[
-            { label: "Total participants", value: total.toLocaleString(), icon: Users, color: "text-teal-700", bg: "bg-teal-50" },
-            { label: "Sur cette page", value: participations.length.toLocaleString(), icon: QrCode, color: "text-violet-600", bg: "bg-violet-50" },
+            //{ label: "Total participants", value: total.toLocaleString(), icon: Users, color: "text-teal-700", bg: "bg-teal-50" },
+            { label: "Total participations", value: total.toLocaleString(), icon: Users, color: "text-teal-700", bg: "bg-teal-50" },
+            { label: "Total participants", value: uniquePhones.toLocaleString(), icon: Users, color: "text-blue-700", bg: "bg-blue-50" },
+            //{ label: "Sur cette page", value: participations.length.toLocaleString(), icon: QrCode, color: "text-violet-600", bg: "bg-violet-50" },
             { label: "Avec points", value: participations.filter(p => p.points_earned > 0).length.toLocaleString(), icon: Star, color: "text-amber-600", bg: "bg-amber-50" },
             { label: "Total points distribués", value: totalPointsDistributed.toLocaleString(), icon: Star, color: "text-orange-600", bg: "bg-orange-50" },
           ].map(card => {
@@ -296,14 +306,14 @@ export default function ScansAdminPage() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-12">
+                <TableRow><TableCell colSpan={8} className="text-center py-12">
                   <div className="flex items-center justify-center gap-2">
                     <div className="w-5 h-5 border-2 border-gray-200 border-t-teal-600 rounded-full animate-spin" />
                     <span className="text-gray-500 text-sm">Chargement...</span>
                   </div>
                 </TableCell></TableRow>
               ) : sortedParticipations.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-12 text-gray-400">
+                <TableRow><TableCell colSpan={8} className="text-center py-12 text-gray-400">
                   Aucun participant trouvé
                 </TableCell></TableRow>
               ) : sortedParticipations.map(p => (
@@ -313,6 +323,7 @@ export default function ScansAdminPage() {
                     <a href={`tel:${p.phone}`} className="text-sm font-mono hover:text-teal-700 transition-colors">{p.phone}</a>
                   </TableCell>
                   <TableCell className="text-sm text-gray-600">{p.email || <span className="text-gray-300">—</span>}</TableCell>
+                  <TableCell><code className="px-2 py-0.5 bg-gray-100 rounded text-xs font-mono">{p.cin_number || "—"}</code></TableCell>
                   <TableCell className="text-sm">{p.promotions?.title || <span className="text-gray-400">—</span>}</TableCell>
                   <TableCell>
                     <code className="px-2 py-0.5 bg-gray-100 rounded text-xs font-mono">{p.promo_code}</code>
