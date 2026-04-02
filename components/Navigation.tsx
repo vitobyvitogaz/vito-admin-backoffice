@@ -268,27 +268,8 @@ export function Navigation() {
               <div
                 ref={drawerScrollRef}
                 onScroll={handleScroll}
-                className="flex-1 overflow-y-auto py-2"
-                style={{
-                  scrollbarWidth: "thin",
-                  scrollbarColor: `${VITOGAZ_GREEN}20 transparent`,
-                }}
+                className="flex-1 overflow-y-auto py-2 custom-scrollbar"
               >
-                <style jsx>{`
-                  div::-webkit-scrollbar {
-                    width: 6px;
-                  }
-                  div::-webkit-scrollbar-track {
-                    background: transparent;
-                  }
-                  div::-webkit-scrollbar-thumb {
-                    background: ${VITOGAZ_GREEN}20;
-                    border-radius: 3px;
-                  }
-                  div::-webkit-scrollbar-thumb:hover {
-                    background: ${VITOGAZ_GREEN}40;
-                  }
-                `}</style>
                 {accessibleGroups.map((group) => {
                   const isExpanded = expandedGroups.includes(group.title);
                   return (
