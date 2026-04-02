@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -153,13 +153,6 @@ export function Navigation() {
     const scrollAmount = direction === "top" ? -200 : 200;
     drawerScrollRef.current.scrollBy({ top: scrollAmount, behavior: "smooth" });
   };
-
-  // Vérifier scroll au montage et à l'ouverture
-  useEffect(() => {
-    if (mobileMenuOpen && drawerScrollRef.current) {
-      handleScroll();
-    }
-  }, [mobileMenuOpen, expandedGroups]);
 
   return (
     <>
