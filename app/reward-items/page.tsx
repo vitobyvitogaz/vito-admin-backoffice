@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Gift, Plus, Pencil, Trash2, Search, X, Package, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Gift, Plus, Pencil, Trash2, Search, X, Package, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { toast } from "@/lib/use-toast";
 import { Header } from "@/components/Header";
@@ -19,7 +19,7 @@ const API_URL = 'https://vito-backend-supabase.onrender.com/api/v1';
 const VITOGAZ_GREEN = "#008B7F";
 const ITEMS_PER_PAGE = 10;
 
-type SortKey = "name" | "points_cost" | "stock_quantity" | "category" | "status";
+type SortKey = "name" | "points_cost" | "stock_quantity" | "category" | "status" | "valid_from" | "valid_until";
 
 interface RewardItem {
   id: string;
@@ -30,6 +30,8 @@ interface RewardItem {
   stock_quantity: number;
   category: string | null;
   status: string;
+  valid_from: string | null;
+  valid_until: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -78,6 +80,8 @@ export default function RewardItemsPage() {
     stock_quantity: "",
     category: "",
     status: "ACTIVE",
+    valid_from: "",
+    valid_until: "",
   });
 
   useEffect(() => {
@@ -98,7 +102,7 @@ export default function RewardItemsPage() {
           (item.description && item.description.toLowerCase().includes(q))
       )
     );
-    setCurrentPage(1); // Reset à la page 1 lors d'une recherche
+    setCurrentPage(1);
   }, [searchQuery, items]);
 
   useEffect(() => {
@@ -132,6 +136,14 @@ export default function RewardItemsPage() {
           aValue = a.status;
           bValue = b.status;
           break;
+        case "valid_from":
+          aValue = a.valid_from ? new Date(a.valid_from).getTime() : 0;
+          bValue = b.valid_from ? new Date(b.valid_from).getTime() : 0;
+          break;
+        case "valid_until":
+          aValue = a.valid_until ? new Date(a.valid_until).getTime() : 0;
+          bValue = b.valid_until ? new Date(b.valid_until).getTime() : 0;
+          break;
         default:
           return 0;
       }
@@ -142,7 +154,7 @@ export default function RewardItemsPage() {
     });
 
     setSortedItems(sorted);
-    setCurrentPage(1); // Reset à la page 1 lors d'un tri
+    setCurrentPage(1);
   }, [filteredItems, sortColumn, sortDirection]);
 
   const handleSort = (col: SortKey) => {
@@ -261,6 +273,8 @@ export default function RewardItemsPage() {
       stock_quantity: parseInt(formData.stock_quantity),
       category: formData.category || null,
       status: formData.status,
+      valid_from: formData.valid_from || null,
+      valid_until: formData.valid_until || null,
     };
 
     try {
@@ -289,6 +303,8 @@ export default function RewardItemsPage() {
       stock_quantity: item.stock_quantity.toString(),
       category: item.category || "",
       status: item.status,
+      valid_from: item.valid_from ? item.valid_from.split('T')[0] : "",
+      valid_until: item.valid_until ? item.valid_until.split('T')[0] : "",
     });
     setEditingId(item.id);
     setIsFormVisible(true);
@@ -323,6 +339,8 @@ export default function RewardItemsPage() {
       stock_quantity: "",
       category: "",
       status: "ACTIVE",
+      valid_from: "",
+      valid_until: "",
     });
     setEditingId(null);
     setIsFormVisible(false);
@@ -362,11 +380,49 @@ export default function RewardItemsPage() {
     );
   };
 
+  const isDateValid = (item: RewardItem) => {
+    const now = new Date();
+    const from = item.valid_from ? new Date(item.valid_from) : null;
+    const until = item.valid_until ? new Date(item.valid_until) : null;
+    
+    if (from && now < from) return false;
+    if (until && now > until) return false;
+    return true;
+  };
+
+  const canToggleStatus = (item: RewardItem) => {
+    if (!item.valid_from && !item.valid_until) return true;
+    return isDateValid(item);
+  };
+
+  const handleExport = () => {
+    if (items.length === 0) { toast({ title: "Aucune donnée à exporter" }); return; }
+    const headers = ["Nom", "Description", "Coût (points)", "Stock", "Catégorie", "Statut", "Date début", "Date fin"];
+    const rows = items.map(item => [
+      item.name,
+      item.description || "",
+      String(item.points_cost),
+      String(item.stock_quantity),
+      item.category || "",
+      item.status,
+      item.valid_from ? new Date(item.valid_from).toLocaleDateString("fr-FR") : "",
+      item.valid_until ? new Date(item.valid_until).toLocaleDateString("fr-FR") : "",
+    ]);
+    const csv  = [headers, ...rows].map(r => r.map(v => `"${v.replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a"); a.href = url; a.download = `articles-cadeaux-${Date.now()}.csv`; a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Export réussi", description: `${items.length} articles exportés` });
+  };
+
   const sortableCols: { key: SortKey; label: string }[] = [
     { key: "name", label: "Nom" },
     { key: "points_cost", label: "Coût (points)" },
     { key: "stock_quantity", label: "Stock" },
     { key: "category", label: "Catégorie" },
+    { key: "valid_from", label: "Date début" },
+    { key: "valid_until", label: "Date fin" },
     { key: "status", label: "Statut" },
   ];
 
@@ -377,10 +433,8 @@ export default function RewardItemsPage() {
     return `Trié par ${colData.label} (${sortDirection === "asc" ? "Croissant" : "Décroissant"})`;
   };
 
-  // Calcul du stock total (somme)
   const totalStock = items.reduce((sum, item) => sum + item.stock_quantity, 0);
 
-  // Pagination
   const totalPages = Math.ceil(sortedItems.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
@@ -390,6 +444,11 @@ export default function RewardItemsPage() {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
     }
+  };
+
+  const formatDate = (date: string | null) => {
+    if (!date) return "—";
+    return new Date(date).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
   };
 
   return (
@@ -404,20 +463,27 @@ export default function RewardItemsPage() {
             <div>
               <h2 className="text-2xl font-bold">Articles à Échanger</h2>
               <p className="text-sm text-gray-500">
-                {items.length} article(s) • {totalStock} unités en stock
+                {items.length} article(s) • {totalStock.toLocaleString()} unités en stock
               </p>
             </div>
           </div>
-          {canManage && (
-            <Button
-              onClick={toggleForm}
-              className="gap-2 text-white"
-              style={{ backgroundColor: VITOGAZ_GREEN }}
-            >
-              <Plus className="w-4 h-4" />
-              {isFormVisible ? "Annuler" : "Nouvel Article"}
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {canManage && (
+              <>
+                <Button onClick={handleExport} variant="outline" className="gap-2">
+                  <Download className="w-4 h-4" /> Exporter CSV
+                </Button>
+                <Button
+                  onClick={toggleForm}
+                  className="gap-2 text-white"
+                  style={{ backgroundColor: VITOGAZ_GREEN }}
+                >
+                  <Plus className="w-4 h-4" />
+                  {isFormVisible ? "Annuler" : "Nouvel Article"}
+                </Button>
+              </>
+            )}
+          </div>
         </div>
 
         {!canManage && (
@@ -567,6 +633,26 @@ export default function RewardItemsPage() {
                         <option value="INACTIVE">Inactif</option>
                       </select>
                     </div>
+
+                    <div>
+                      <Label htmlFor="valid_from">Date début validité</Label>
+                      <Input
+                        id="valid_from"
+                        type="date"
+                        value={formData.valid_from}
+                        onChange={(e) => setFormData({ ...formData, valid_from: e.target.value })}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="valid_until">Date fin validité</Label>
+                      <Input
+                        id="valid_until"
+                        type="date"
+                        value={formData.valid_until}
+                        onChange={(e) => setFormData({ ...formData, valid_until: e.target.value })}
+                      />
+                    </div>
                   </div>
 
                   <div className="flex gap-3">
@@ -628,92 +714,103 @@ export default function RewardItemsPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={canManage ? 7 : 6} className="text-center py-8">
+                  <TableCell colSpan={canManage ? 9 : 8} className="text-center py-8">
                     Chargement...
                   </TableCell>
                 </TableRow>
               ) : paginatedItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canManage ? 7 : 6} className="text-center py-8">
+                  <TableCell colSpan={canManage ? 9 : 8} className="text-center py-8">
                     Aucun article trouvé
                   </TableCell>
                 </TableRow>
               ) : (
-                paginatedItems.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      {item.image_url ? (
-                        <img
-                          src={item.image_url}
-                          alt={item.name}
-                          className="w-12 h-12 object-cover rounded-lg"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                          <Package className="w-5 h-5 text-gray-400" />
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {item.name}
-                      {item.description && (
-                        <div className="text-xs text-gray-400 mt-1 line-clamp-1">
-                          {item.description}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className="font-semibold text-sm"
-                        style={{ color: VITOGAZ_GREEN }}
-                      >
-                        {item.points_cost} pts
-                      </span>
-                    </TableCell>
-                    <TableCell>{getStockBadge(item.stock_quantity)}</TableCell>
-                    <TableCell className="text-sm text-gray-600">
-                      {item.category || "—"}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`px-2 py-1 text-xs rounded-full ${
-                          item.status === "ACTIVE"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-gray-100 text-gray-500"
-                        }`}
-                      >
-                        {item.status === "ACTIVE" ? "Actif" : "Inactif"}
-                      </span>
-                    </TableCell>
-                    {canManage && (
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEdit(item)}
-                            title="Modifier"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleDelete(item.id)}
-                            title="Supprimer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
+                paginatedItems.map((item) => {
+                  const dateValid = isDateValid(item);
+                  const effectiveStatus = !dateValid ? "INACTIVE" : item.status;
+                  
+                  return (
+                    <TableRow key={item.id}>
+                      <TableCell>
+                        {item.image_url ? (
+                          <img
+                            src={item.image_url}
+                            alt={item.name}
+                            className="w-12 h-12 object-cover rounded-lg"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                            <Package className="w-5 h-5 text-gray-400" />
+                          </div>
+                        )}
                       </TableCell>
-                    )}
-                  </TableRow>
-                ))
+                      <TableCell className="font-medium">
+                        {item.name}
+                        {item.description && (
+                          <div className="text-xs text-gray-400 mt-1 line-clamp-1">
+                            {item.description}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className="font-semibold text-sm"
+                          style={{ color: VITOGAZ_GREEN }}
+                        >
+                          {item.points_cost} pts
+                        </span>
+                      </TableCell>
+                      <TableCell>{getStockBadge(item.stock_quantity)}</TableCell>
+                      <TableCell className="text-sm text-gray-600">
+                        {item.category || "—"}
+                      </TableCell>
+                      <TableCell className="text-xs text-gray-500 whitespace-nowrap">
+                        {formatDate(item.valid_from)}
+                      </TableCell>
+                      <TableCell className="text-xs text-gray-500 whitespace-nowrap">
+                        {formatDate(item.valid_until)}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`px-2 py-1 text-xs rounded-full ${
+                            effectiveStatus === "ACTIVE"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-gray-100 text-gray-500"
+                          }`}
+                          title={!dateValid ? "Inactif (hors période de validité)" : ""}
+                        >
+                          {effectiveStatus === "ACTIVE" ? "Actif" : "Inactif"}
+                        </span>
+                      </TableCell>
+                      {canManage && (
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(item)}
+                              title="Modifier"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDelete(item.id)}
+                              title="Supprimer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>
           
-          {/* Footer avec pagination */}
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 min-h-[52px]">
             <div className="flex items-center gap-4">
               <p className="text-xs text-gray-400 italic">{sortLabel() || ""}</p>

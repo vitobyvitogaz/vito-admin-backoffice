@@ -8,7 +8,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  QrCode, Search, Download, RefreshCw, Users, Star, Filter, X,
+  QrCode, Search, Download, RefreshCw, Users, Star, Filter, X, ArrowUpDown, ArrowUp, ArrowDown,
 } from "lucide-react";
 import { apiGet } from "@/lib/api";
 import { toast } from "@/lib/use-toast";
@@ -32,6 +32,8 @@ interface Participation {
 
 interface Promo { id: string; title: string; promo_code: string | null }
 
+type SortKey = "name" | "phone" | "email" | "promo_code" | "promotion" | "points_earned" | "scanned_at";
+
 const PAGE_SIZE = 50;
 
 export default function ScansAdminPage() {
@@ -45,6 +47,9 @@ export default function ScansAdminPage() {
   const [searchInput, setSearchInput] = useState("");
   const [promos, setPromos]   = useState<Promo[]>([]);
   const [promoFilter, setPromoFilter] = useState("");
+
+  const [sortColumn, setSortColumn] = useState<SortKey | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -74,6 +79,72 @@ export default function ScansAdminPage() {
   const handleSearch = () => { setPage(1); setSearch(searchInput); };
   const handleReset  = () => { setSearchInput(""); setSearch(""); setPromoFilter(""); setPage(1); };
 
+  const handleSort = (col: SortKey) => {
+    if (sortColumn !== col) {
+      setSortColumn(col);
+      setSortDirection("asc");
+    } else if (sortDirection === "asc") {
+      setSortDirection("desc");
+    } else {
+      setSortColumn(null);
+      setSortDirection(null);
+    }
+  };
+
+  const SortIcon = ({ column }: { column: SortKey }) => {
+    if (sortColumn !== column) {
+      return <ArrowUpDown className="w-3.5 h-3.5 text-gray-400 ml-1 inline" />;
+    }
+    if (sortDirection === "asc") {
+      return <ArrowUp className="w-3.5 h-3.5 ml-1 inline" style={{ color: VITOGAZ_GREEN }} />;
+    }
+    return <ArrowDown className="w-3.5 h-3.5 ml-1 inline" style={{ color: VITOGAZ_GREEN }} />;
+  };
+
+  const sortedParticipations = [...participations].sort((a, b) => {
+    if (!sortColumn || !sortDirection) return 0;
+
+    let aValue: any;
+    let bValue: any;
+
+    switch (sortColumn) {
+      case "name":
+        aValue = a.name.toLowerCase();
+        bValue = b.name.toLowerCase();
+        break;
+      case "phone":
+        aValue = a.phone;
+        bValue = b.phone;
+        break;
+      case "email":
+        aValue = (a.email || "").toLowerCase();
+        bValue = (b.email || "").toLowerCase();
+        break;
+      case "promo_code":
+        aValue = a.promo_code.toLowerCase();
+        bValue = b.promo_code.toLowerCase();
+        break;
+      case "promotion":
+        aValue = (a.promotions?.title || "").toLowerCase();
+        bValue = (b.promotions?.title || "").toLowerCase();
+        break;
+      case "points_earned":
+        aValue = a.points_earned;
+        bValue = b.points_earned;
+        break;
+      case "scanned_at":
+        aValue = new Date(a.scanned_at).getTime();
+        bValue = new Date(b.scanned_at).getTime();
+        break;
+      default:
+        return 0;
+    }
+
+    if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
+    if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
+    return 0;
+  });
+
   // ── Export CSV ───────────────────────────────────────────────────────────
   const handleExport = () => {
     if (participations.length === 0) { toast({ title: "Aucune donnée à exporter" }); return; }
@@ -97,6 +168,17 @@ export default function ScansAdminPage() {
 
   const fmt = (d: string) => new Date(d).toLocaleString("fr-FR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
   const totalPages = Math.ceil(total / PAGE_SIZE);
+  const totalPointsDistributed = participations.reduce((s, p) => s + p.points_earned, 0);
+
+  const sortableCols: { key: SortKey; label: string }[] = [
+    { key: "name", label: "Nom" },
+    { key: "phone", label: "Téléphone" },
+    { key: "email", label: "Email" },
+    { key: "promotion", label: "Promotion" },
+    { key: "promo_code", label: "Code" },
+    { key: "points_earned", label: "Points" },
+    { key: "scanned_at", label: "Date" },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -167,10 +249,10 @@ export default function ScansAdminPage() {
         {/* Stats rapides */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           {[
-            { label: "Total participants", value: total, icon: Users, color: "text-teal-700", bg: "bg-teal-50" },
-            { label: "Sur cette page", value: participations.length, icon: QrCode, color: "text-violet-600", bg: "bg-violet-50" },
-            { label: "Avec points", value: participations.filter(p => p.points_earned > 0).length, icon: Star, color: "text-amber-600", bg: "bg-amber-50" },
-            { label: "Total points distribués", value: participations.reduce((s, p) => s + p.points_earned, 0), icon: Star, color: "text-orange-600", bg: "bg-orange-50" },
+            { label: "Total participants", value: total.toLocaleString(), icon: Users, color: "text-teal-700", bg: "bg-teal-50" },
+            { label: "Sur cette page", value: participations.length.toLocaleString(), icon: QrCode, color: "text-violet-600", bg: "bg-violet-50" },
+            { label: "Avec points", value: participations.filter(p => p.points_earned > 0).length.toLocaleString(), icon: Star, color: "text-amber-600", bg: "bg-amber-50" },
+            { label: "Total points distribués", value: totalPointsDistributed.toLocaleString(), icon: Star, color: "text-orange-600", bg: "bg-orange-50" },
           ].map(card => {
             const Icon = card.icon;
             return (
@@ -194,13 +276,22 @@ export default function ScansAdminPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nom</TableHead>
-                <TableHead>Téléphone</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Promotion</TableHead>
-                <TableHead>Code</TableHead>
-                <TableHead className="text-center">Points</TableHead>
-                <TableHead>Date</TableHead>
+                {sortableCols.map((col) => {
+                  const isColActive = sortColumn === col.key;
+                  return (
+                    <TableHead
+                      key={col.key}
+                      onClick={() => handleSort(col.key)}
+                      className={`cursor-pointer select-none transition-colors hover:bg-gray-50 ${col.key === "points_earned" ? "text-center" : ""}`}
+                      style={isColActive ? { backgroundColor: "#f0faf9", color: VITOGAZ_GREEN } : {}}
+                    >
+                      <span className="flex items-center gap-1">
+                        {col.label}
+                        <SortIcon column={col.key} />
+                      </span>
+                    </TableHead>
+                  );
+                })}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -211,11 +302,11 @@ export default function ScansAdminPage() {
                     <span className="text-gray-500 text-sm">Chargement...</span>
                   </div>
                 </TableCell></TableRow>
-              ) : participations.length === 0 ? (
+              ) : sortedParticipations.length === 0 ? (
                 <TableRow><TableCell colSpan={7} className="text-center py-12 text-gray-400">
                   Aucun participant trouvé
                 </TableCell></TableRow>
-              ) : participations.map(p => (
+              ) : sortedParticipations.map(p => (
                 <TableRow key={p.id} className="hover:bg-gray-50 transition-colors">
                   <TableCell className="font-medium text-sm">{p.name}</TableCell>
                   <TableCell>

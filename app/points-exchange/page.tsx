@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Gift, Check, X, RefreshCw, Clock, CheckCircle, XCircle } from "lucide-react";
+import { Gift, Check, X, RefreshCw, Clock, CheckCircle, XCircle, Download, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { apiGet, apiPatch } from "@/lib/api";
 import { toast } from "@/lib/use-toast";
 import { Header } from "@/components/Header";
@@ -14,11 +14,13 @@ import { Navigation } from "@/components/Navigation";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 
 const VITOGAZ_GREEN = "#008B7F";
+const ITEMS_PER_PAGE = 20;
 
 interface Exchange {
   id: string;
   phone: string;
   name: string | null;
+  cin_number: string | null;
   points_requested: number;
   reward_description: string | null;
   status: "pending" | "validated" | "rejected";
@@ -27,6 +29,7 @@ interface Exchange {
 }
 
 type StatusFilter = "all" | "pending" | "validated" | "rejected";
+type SortKey = "name" | "phone" | "cin_number" | "points_requested" | "reward_description" | "status" | "requested_at";
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; icon: React.ElementType }> = {
   pending:   { label: "En attente", bg: "bg-amber-100",  text: "text-amber-700",  icon: Clock },
@@ -42,6 +45,10 @@ export default function PointsExchangePage() {
   const [filter, setFilter]         = useState<StatusFilter>("all");
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ id: string; action: "validate" | "reject"; name: string } | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const [sortColumn, setSortColumn] = useState<SortKey | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc" | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -80,8 +87,118 @@ export default function PointsExchangePage() {
     } finally { setProcessingId(null); }
   };
 
+  const handleSort = (col: SortKey) => {
+    if (sortColumn !== col) {
+      setSortColumn(col);
+      setSortDirection("asc");
+    } else if (sortDirection === "asc") {
+      setSortDirection("desc");
+    } else {
+      setSortColumn(null);
+      setSortDirection(null);
+    }
+  };
+
+  const SortIcon = ({ column }: { column: SortKey }) => {
+    if (sortColumn !== column) {
+      return <ArrowUpDown className="w-3.5 h-3.5 text-gray-400 ml-1 inline" />;
+    }
+    if (sortDirection === "asc") {
+      return <ArrowUp className="w-3.5 h-3.5 ml-1 inline" style={{ color: VITOGAZ_GREEN }} />;
+    }
+    return <ArrowDown className="w-3.5 h-3.5 ml-1 inline" style={{ color: VITOGAZ_GREEN }} />;
+  };
+
+  const sortedExchanges = [...exchanges].sort((a, b) => {
+    if (!sortColumn || !sortDirection) return 0;
+
+    let aValue: any;
+    let bValue: any;
+
+    switch (sortColumn) {
+      case "name":
+        aValue = (a.name || "").toLowerCase();
+        bValue = (b.name || "").toLowerCase();
+        break;
+      case "phone":
+        aValue = a.phone;
+        bValue = b.phone;
+        break;
+      case "cin_number":
+        aValue = a.cin_number || "";
+        bValue = b.cin_number || "";
+        break;
+      case "points_requested":
+        aValue = a.points_requested;
+        bValue = b.points_requested;
+        break;
+      case "reward_description":
+        aValue = (a.reward_description || "").toLowerCase();
+        bValue = (b.reward_description || "").toLowerCase();
+        break;
+      case "status":
+        aValue = a.status;
+        bValue = b.status;
+        break;
+      case "requested_at":
+        aValue = new Date(a.requested_at).getTime();
+        bValue = new Date(b.requested_at).getTime();
+        break;
+      default:
+        return 0;
+    }
+
+    if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
+    if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  // Pagination
+  const totalPages = Math.ceil(sortedExchanges.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedExchanges = sortedExchanges.slice(startIndex, endIndex);
+
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  // Export CSV
+  const handleExport = () => {
+    if (exchanges.length === 0) { toast({ title: "Aucune donnée à exporter" }); return; }
+    const headers = ["Participant", "Téléphone", "CIN", "Points", "Récompense", "Statut", "Date demande", "Date validation"];
+    const rows = exchanges.map(ex => [
+      ex.name || "",
+      ex.phone,
+      ex.cin_number || "",
+      String(ex.points_requested),
+      ex.reward_description || "",
+      STATUS_CONFIG[ex.status]?.label || ex.status,
+      new Date(ex.requested_at).toLocaleString("fr-FR"),
+      ex.validated_at ? new Date(ex.validated_at).toLocaleString("fr-FR") : "",
+    ]);
+    const csv  = [headers, ...rows].map(r => r.map(v => `"${v.replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a"); a.href = url; a.download = `echanges-${Date.now()}.csv`; a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Export réussi", description: `${exchanges.length} échanges exportés` });
+  };
+
   const fmt     = (d: string) => new Date(d).toLocaleString("fr-FR", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
   const pending = exchanges.filter(e => e.status === "pending").length;
+
+  const sortableCols: { key: SortKey; label: string }[] = [
+    { key: "name", label: "Participant" },
+    { key: "phone", label: "Téléphone" },
+    { key: "cin_number", label: "CIN" },
+    { key: "points_requested", label: "Points" },
+    { key: "reward_description", label: "Récompense souhaitée" },
+    { key: "status", label: "Statut" },
+    { key: "requested_at", label: "Date demande" },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -103,9 +220,16 @@ export default function PointsExchangePage() {
               </p>
             </div>
           </div>
-          <Button variant="outline" onClick={fetchData} className="gap-2">
-            <RefreshCw className="w-4 h-4" /> Actualiser
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={fetchData} className="gap-2">
+              <RefreshCw className="w-4 h-4" /> Actualiser
+            </Button>
+            {canManageScans && (
+              <Button onClick={handleExport} className="gap-2 text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
+                <Download className="w-4 h-4" /> Exporter CSV
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Filtres de statut */}
@@ -114,7 +238,7 @@ export default function PointsExchangePage() {
             const cfg   = s === "all" ? null : STATUS_CONFIG[s];
             const count = s === "all" ? exchanges.length : exchanges.filter(e => e.status === s).length;
             return (
-              <button key={s} onClick={() => setFilter(s)}
+              <button key={s} onClick={() => { setFilter(s); setCurrentPage(1); }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium border-2 transition-all ${
                   filter === s
                     ? "text-white border-transparent"
@@ -160,31 +284,41 @@ export default function PointsExchangePage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Participant</TableHead>
-                <TableHead>Téléphone</TableHead>
-                <TableHead className="text-center">Points</TableHead>
-                <TableHead>Récompense souhaitée</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead>Date demande</TableHead>
+                {sortableCols.map((col) => {
+                  const isColActive = sortColumn === col.key;
+                  return (
+                    <TableHead
+                      key={col.key}
+                      onClick={() => handleSort(col.key)}
+                      className={`cursor-pointer select-none transition-colors hover:bg-gray-50 ${col.key === "points_requested" ? "text-center" : ""}`}
+                      style={isColActive ? { backgroundColor: "#f0faf9", color: VITOGAZ_GREEN } : {}}
+                    >
+                      <span className="flex items-center gap-1">
+                        {col.label}
+                        <SortIcon column={col.key} />
+                      </span>
+                    </TableHead>
+                  );
+                })}
                 {canManageScans && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={canManageScans ? 7 : 6} className="text-center py-12">
+                <TableRow><TableCell colSpan={canManageScans ? 8 : 7} className="text-center py-12">
                   <div className="flex items-center justify-center gap-2">
                     <div className="w-5 h-5 border-2 border-gray-200 border-t-teal-600 rounded-full animate-spin" />
                     <span className="text-gray-500 text-sm">Chargement...</span>
                   </div>
                 </TableCell></TableRow>
-              ) : exchanges.length === 0 ? (
-                <TableRow><TableCell colSpan={canManageScans ? 7 : 6} className="text-center py-12">
+              ) : paginatedExchanges.length === 0 ? (
+                <TableRow><TableCell colSpan={canManageScans ? 8 : 7} className="text-center py-12">
                   <div className="flex flex-col items-center gap-3">
                     <Gift className="w-10 h-10 text-gray-200" strokeWidth={1} />
                     <p className="text-gray-400 text-sm">Aucun échange{filter !== "all" ? ` "${STATUS_CONFIG[filter]?.label.toLowerCase()}"` : ""}</p>
                   </div>
                 </TableCell></TableRow>
-              ) : exchanges.map(ex => {
+              ) : paginatedExchanges.map(ex => {
                 const cfg  = STATUS_CONFIG[ex.status];
                 const Icon = cfg?.icon;
                 return (
@@ -192,6 +326,9 @@ export default function PointsExchangePage() {
                     <TableCell className="font-medium text-sm">{ex.name || "—"}</TableCell>
                     <TableCell>
                       <a href={`tel:${ex.phone}`} className="text-sm font-mono hover:text-teal-700 transition-colors">{ex.phone}</a>
+                    </TableCell>
+                    <TableCell>
+                      <code className="px-2 py-0.5 bg-gray-100 rounded text-xs font-mono">{ex.cin_number || "—"}</code>
                     </TableCell>
                     <TableCell className="text-center">
                       <span className="flex items-center justify-center gap-1 font-bold text-sm" style={{ color: VITOGAZ_GREEN }}>
@@ -240,8 +377,39 @@ export default function PointsExchangePage() {
               })}
             </TableBody>
           </Table>
-          <div className="px-4 py-3 border-t border-gray-100">
-            <p className="text-xs text-gray-400">{exchanges.length} échange{exchanges.length > 1 ? "s" : ""} affiché{exchanges.length > 1 ? "s" : ""}</p>
+
+          {/* Footer avec pagination */}
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 min-h-[52px]">
+            <div className="flex items-center gap-4">
+              {totalPages > 1 && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="h-8"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <span className="text-sm text-gray-600">
+                    Page {currentPage} / {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="h-8"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+            <p className="text-sm text-gray-500">
+              {startIndex + 1}-{Math.min(endIndex, sortedExchanges.length)} sur {sortedExchanges.length} échange{sortedExchanges.length > 1 ? "s" : ""}
+            </p>
           </div>
         </Card>
       </main>
