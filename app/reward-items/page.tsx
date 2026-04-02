@@ -19,7 +19,7 @@ const API_URL = 'https://vito-backend-supabase.onrender.com/api/v1';
 const VITOGAZ_GREEN = "#008B7F";
 const ITEMS_PER_PAGE = 10;
 
-type SortKey = "name" | "points_cost" | "stock_quantity" | "category" | "status" | "valid_from" | "valid_until";
+type SortKey = "name" | "points_cost" | "category" | "status" | "valid_from" | "valid_until";
 
 interface RewardItem {
   id: string;
@@ -28,6 +28,8 @@ interface RewardItem {
   image_url: string | null;
   points_cost: number;
   stock_quantity: number;
+  initial_stock: number | null;
+  validated_count?: number;
   category: string | null;
   status: string;
   valid_from: string | null;
@@ -123,10 +125,6 @@ export default function RewardItemsPage() {
         case "points_cost":
           aValue = a.points_cost;
           bValue = b.points_cost;
-          break;
-        case "stock_quantity":
-          aValue = a.stock_quantity;
-          bValue = b.stock_quantity;
           break;
         case "category":
           aValue = (a.category || "").toLowerCase();
@@ -375,7 +373,7 @@ export default function RewardItemsPage() {
     }
     return (
       <span className="px-2 py-1 text-xs rounded-full bg-emerald-100 text-emerald-700 font-medium">
-        {stock} en stock
+        {stock}
       </span>
     );
   };
@@ -397,11 +395,13 @@ export default function RewardItemsPage() {
 
   const handleExport = () => {
     if (items.length === 0) { toast({ title: "Aucune donnée à exporter" }); return; }
-    const headers = ["Nom", "Description", "Coût (points)", "Stock", "Catégorie", "Statut", "Date début", "Date fin"];
+    const headers = ["Nom", "Description", "Coût (points)", "Stock départ", "Validées", "Stock restant", "Catégorie", "Statut", "Date début", "Date fin"];
     const rows = items.map(item => [
       item.name,
       item.description || "",
       String(item.points_cost),
+      String(item.initial_stock || item.stock_quantity),
+      String(item.validated_count || 0),
       String(item.stock_quantity),
       item.category || "",
       item.status,
@@ -419,7 +419,6 @@ export default function RewardItemsPage() {
   const sortableCols: { key: SortKey; label: string }[] = [
     { key: "name", label: "Nom" },
     { key: "points_cost", label: "Coût (points)" },
-    { key: "stock_quantity", label: "Stock" },
     { key: "category", label: "Catégorie" },
     { key: "valid_from", label: "Date début" },
     { key: "valid_until", label: "Date fin" },
@@ -708,19 +707,22 @@ export default function RewardItemsPage() {
                     </TableHead>
                   );
                 })}
+                <TableHead>Stock départ</TableHead>
+                <TableHead>Validées</TableHead>
+                <TableHead>Restant</TableHead>
                 {canManage && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={canManage ? 9 : 8} className="text-center py-8">
+                  <TableCell colSpan={canManage ? 11 : 10} className="text-center py-8">
                     Chargement...
                   </TableCell>
                 </TableRow>
               ) : paginatedItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canManage ? 9 : 8} className="text-center py-8">
+                  <TableCell colSpan={canManage ? 11 : 10} className="text-center py-8">
                     Aucun article trouvé
                   </TableCell>
                 </TableRow>
@@ -760,7 +762,6 @@ export default function RewardItemsPage() {
                           {item.points_cost} pts
                         </span>
                       </TableCell>
-                      <TableCell>{getStockBadge(item.stock_quantity)}</TableCell>
                       <TableCell className="text-sm text-gray-600">
                         {item.category || "—"}
                       </TableCell>
@@ -782,6 +783,13 @@ export default function RewardItemsPage() {
                           {effectiveStatus === "ACTIVE" ? "Actif" : "Inactif"}
                         </span>
                       </TableCell>
+                      <TableCell className="text-sm text-gray-600 text-center">
+                        {item.initial_stock || item.stock_quantity}
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-600 text-center">
+                        {item.validated_count || 0}
+                      </TableCell>
+                      <TableCell className="text-center">{getStockBadge(item.stock_quantity)}</TableCell>
                       {canManage && (
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
