@@ -244,18 +244,17 @@ export default function LeaderboardPage() {
               <TableRow>
                 {sortableCols.map((col) => {
                   const isColActive = sortColumn === col.key;
+                  const isNumeric = ["rank", "total_points", "used_points", "participations_count"].includes(col.key);
                   return (
                     <TableHead
                       key={col.key}
                       onClick={() => handleSort(col.key)}
                       className={`cursor-pointer select-none transition-colors hover:bg-gray-50 ${
-                        ["rank", "total_points", "used_points", "participations_count"].includes(col.key)
-                          ? "text-right pr-6"
-                          : ""
+                        isNumeric ? "text-right" : ""
                       }`}
                       style={isColActive ? { backgroundColor: "#f0faf9", color: VITOGAZ_GREEN } : {}}
                     >
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1 justify-end">
                         {col.label}
                         <SortIcon column={col.key} />
                       </span>
@@ -285,10 +284,10 @@ export default function LeaderboardPage() {
                   const medal = getMedal(entry.rank);
                   return (
                     <TableRow key={entry.phone} className="hover:bg-gray-50 transition-colors">
-                      <TableCell className="text-right pr-6">
+                      <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           {medal && <span className="text-2xl">{medal}</span>}
-                          <span className={`font-bold ${entry.rank <= 3 ? "text-lg" : "text-sm"}`}>
+                          <span className={`font-bold tabular-nums ${entry.rank <= 3 ? "text-lg" : "text-sm"}`}>
                             {entry.rank}
                           </span>
                         </div>
@@ -302,7 +301,7 @@ export default function LeaderboardPage() {
                           {entry.phone}
                         </a>
                       </TableCell>
-                      <TableCell className="text-right pr-6">
+                      <TableCell className="text-right tabular-nums">
                         <span
                           className="font-semibold text-sm"
                           style={{ color: rankCriterion === "total_points" ? VITOGAZ_GREEN : undefined }}
@@ -310,7 +309,7 @@ export default function LeaderboardPage() {
                           {entry.total_points.toLocaleString()}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right pr-6">
+                      <TableCell className="text-right tabular-nums">
                         <span
                           className="font-semibold text-sm"
                           style={{ color: rankCriterion === "used_points" ? VITOGAZ_GREEN : undefined }}
@@ -318,7 +317,7 @@ export default function LeaderboardPage() {
                           {entry.used_points.toLocaleString()}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right pr-6">
+                      <TableCell className="text-right tabular-nums">
                         <span
                           className="font-semibold text-sm"
                           style={{ color: rankCriterion === "participations_count" ? VITOGAZ_GREEN : undefined }}

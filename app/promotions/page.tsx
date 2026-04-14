@@ -290,7 +290,15 @@ export default function PromotionsPage() {
   const [togglingId, setTogglingId]           = useState<string | null>(null);
   const formRef                               = useRef<HTMLDivElement>(null);
   const [showPopupConfig, setShowPopupConfig] = useState(false);
-  const [showQrModal, setShowQrModal]         = useState<string | null>(null); // promo_code du QR à afficher
+  const [showQrModal, setShowQrModal]         = useState<string | null>(null);
+  const [showEnterpriseConfig, setShowEnterpriseConfig] = useState(false);
+  const [enterpriseSettings, setEnterpriseSettings] = useState({
+    title:      "Votre entreprise a besoin de Gaz ?",
+    subtitle:   "Découvrez notre offre partenariat conçu pour vous !",
+    phone:      "032 07 218 95",
+    show_phone: true,
+  });
+  const [savingEnterprise, setSavingEnterprise] = useState(false);
   const [popupSettings, setPopupSettings]     = useState<PopupSettings>({
     cooldown_hours: 48, delay_seconds: 3, allowed_pages: ['home'], auto_close_seconds: 30, enabled: true,
     popup_strategy: 'featured', popup_fixed_promo_id: '',
@@ -316,7 +324,7 @@ export default function PromotionsPage() {
 
   const [newCondition, setNewCondition] = useState("");
 
-  useEffect(() => { fetchPromotions(); fetchPopupSettings(); }, []);
+  useEffect(() => { fetchPromotions(); fetchPopupSettings(); fetchEnterpriseSettings(); }, []);
 
   useEffect(() => {
     if (searchQuery.trim() === "") { setFilteredPromotions(promotions); return; }
@@ -379,6 +387,29 @@ export default function PromotionsPage() {
       const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
       setPopupSettings(prev => ({ ...prev, ...parsed }));
     } catch {}
+  };
+
+  const fetchEnterpriseSettings = async () => {
+    try {
+      const data = await apiGet<any>('/settings/enterprise_offer_settings');
+      if (!data) return;
+      const raw    = data?.setting_value ?? data?.value ?? data;
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      setEnterpriseSettings(prev => ({ ...prev, ...parsed }));
+    } catch {}
+  };
+
+  const saveEnterpriseSettings = async () => {
+    setSavingEnterprise(true);
+    try {
+      await apiPatch('/settings/key/enterprise_offer_settings', {
+        setting_value: JSON.stringify(enterpriseSettings),
+      });
+      toast({ title: "Succès !", description: "Config Offre Entreprise sauvegardée" });
+      setShowEnterpriseConfig(false);
+    } catch {
+      toast({ title: "Erreur", description: "Impossible de sauvegarder", variant: "destructive" });
+    } finally { setSavingEnterprise(false); }
   };
 
   const savePopupSettings = async () => {
@@ -606,6 +637,11 @@ export default function PromotionsPage() {
           </div>
           <div className="flex items-center gap-2">
             {canWrite && (
+              <Button variant="outline" onClick={() => setShowEnterpriseConfig(!showEnterpriseConfig)} className="gap-2">
+                <Settings className="w-4 h-4" />Offre Entreprise
+              </Button>
+            )}
+            {canWrite && (
               <Button variant="outline" onClick={() => setShowPopupConfig(!showPopupConfig)} className="gap-2">
                 <Settings className="w-4 h-4" />Config popup
               </Button>
@@ -618,6 +654,60 @@ export default function PromotionsPage() {
             )}
           </div>
         </div>
+
+        {/* Config Offre Entreprise */}
+        {showEnterpriseConfig && canWrite && (
+          <Card className="mb-6 border-2" style={{ borderColor: VITOGAZ_GREEN + "30" }}>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Settings className="w-4 h-4" style={{ color: VITOGAZ_GREEN }} />
+                Configuration — Page Offre Entreprise (PWA)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <Label>Titre principal</Label>
+                  <Input className="mt-1" value={enterpriseSettings.title}
+                    onChange={e => setEnterpriseSettings(s => ({ ...s, title: e.target.value }))}
+                    placeholder="Votre entreprise a besoin de Gaz ?" />
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Sous-titre</Label>
+                  <Input className="mt-1" value={enterpriseSettings.subtitle}
+                    onChange={e => setEnterpriseSettings(s => ({ ...s, subtitle: e.target.value }))}
+                    placeholder="Découvrez notre offre partenariat conçu pour vous !" />
+                </div>
+                <div>
+                  <Label>Numéro de téléphone</Label>
+                  <Input className="mt-1" value={enterpriseSettings.phone}
+                    onChange={e => setEnterpriseSettings(s => ({ ...s, phone: e.target.value }))}
+                    placeholder="032 07 218 95" />
+                  <p className="text-xs text-gray-400 mt-1">Format international recommandé : +261 32 07 218 95</p>
+                </div>
+                <div className="flex items-center gap-3 mt-6">
+                  <input type="checkbox" id="show_phone" checked={enterpriseSettings.show_phone}
+                    onChange={e => setEnterpriseSettings(s => ({ ...s, show_phone: e.target.checked }))}
+                    className="w-4 h-4" />
+                  <Label htmlFor="show_phone" className="cursor-pointer">
+                    Afficher le numéro de téléphone sur le bouton d'appel
+                  </Label>
+                </div>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                <p className="text-xs text-gray-500 font-medium mb-1">Aperçu du titre :</p>
+                <p className="text-sm font-bold text-gray-800">{enterpriseSettings.title || '—'}</p>
+                <p className="text-xs text-gray-500 mt-1">{enterpriseSettings.subtitle || '—'}</p>
+                {enterpriseSettings.show_phone && (
+                  <p className="text-xs text-primary mt-1 font-medium">📞 {enterpriseSettings.phone}</p>
+                )}
+              </div>
+              <Button onClick={saveEnterpriseSettings} disabled={savingEnterprise} className="text-white" style={{ backgroundColor: VITOGAZ_GREEN }}>
+                {savingEnterprise ? "Sauvegarde..." : "Enregistrer"}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Config popup */}
         {showPopupConfig && canWrite && (

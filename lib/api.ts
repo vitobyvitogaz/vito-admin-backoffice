@@ -37,7 +37,8 @@ export async function apiFetch(
       toast({
         title: 'Session expirée',
         description: 'Votre session a expiré. Veuillez vous reconnecter.',
-        variant: 'destructive',
+        variant: 'default',
+        className: 'border-amber-500 bg-amber-50',
       });
 
       // Clear token
