@@ -76,7 +76,6 @@ function computeTrend(data: EvolutionPoint[], currentTotal: number): { value: nu
   return { value: Math.abs(pct), positive: pct >= 0 };
 }
 
-// ── CORRECTION : démarre depuis total actuel - delta période ─────────────
 function toCumulative(data: EvolutionPoint[], currentTotal: number): EvolutionPoint[] {
   const totalDelta = data.reduce((sum, d) => sum + d.count, 0);
   let running = currentTotal - totalDelta;
@@ -84,6 +83,23 @@ function toCumulative(data: EvolutionPoint[], currentTotal: number): EvolutionPo
     running += count;
     return { date, count: Math.max(0, running) };
   });
+}
+
+function generatePages(current: number, total: number, siblings: number = 1): (number | "dots")[] {
+  const totalSlots = siblings * 2 + 5;
+  if (total <= totalSlots) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  const left = Math.max(current - siblings, 2);
+  const right = Math.min(current + siblings, total - 1);
+  const items: (number | "dots")[] = [1];
+  if (left > 2) items.push("dots");
+  else for (let i = 2; i < left; i++) items.push(i);
+  for (let i = left; i <= right; i++) items.push(i);
+  if (right < total - 1) items.push("dots");
+  else for (let i = right + 1; i < total; i++) items.push(i);
+  items.push(total);
+  return items;
 }
 
 function StatCardSkeleton() {
@@ -126,7 +142,6 @@ function PeriodSelector({ value, onChange }: { value: PeriodKey; onChange: (v: P
   );
 }
 
-// ── CORRECTION : currentTotal ajouté dans les props ──────────────────────
 function EvolutionCard({ title, entity, color, period, onPeriodChange, data, loading, currentTotal }: {
   title: string; entity: EntityKey; color: string; period: PeriodKey;
   onPeriodChange: (v: PeriodKey) => void; data: EvolutionPoint[]; loading: boolean;
@@ -233,13 +248,12 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push("/login"); return; }
-    
-    // Redirection pour GESTIONNAIRE_PROMO
+
     if (isGestionnairePromo) {
       router.push("/scans");
       return;
     }
-    
+
     fetchSummary();
     fetchQrScans();
     (["resellers", "delivery-companies", "promotions", "qr-scans"] as EntityKey[]).forEach(
@@ -345,7 +359,6 @@ export default function DashboardPage() {
         <div>
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Évolutions</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* ── CORRECTION : currentTotal passé depuis summary ── */}
             <EvolutionCard title="Revendeurs" entity="resellers" color={CHART_COLORS.resellers} period={periods.resellers} onPeriodChange={(v) => handlePeriodChange("resellers", v)} data={evolutionData.resellers} loading={evolutionLoading.resellers} currentTotal={summary.resellers} />
             <EvolutionCard title="Sociétés de Livraison" entity="delivery-companies" color={CHART_COLORS["delivery-companies"]} period={periods["delivery-companies"]} onPeriodChange={(v) => handlePeriodChange("delivery-companies", v)} data={evolutionData["delivery-companies"]} loading={evolutionLoading["delivery-companies"]} currentTotal={summary.deliveryCompanies} />
             <EvolutionCard title="Promotions" entity="promotions" color={CHART_COLORS.promotions} period={periods.promotions} onPeriodChange={(v) => handlePeriodChange("promotions", v)} data={evolutionData.promotions} loading={evolutionLoading.promotions} currentTotal={summary.promotions} />
@@ -485,16 +498,20 @@ export default function DashboardPage() {
                   {qrTotalPages > 1 && (
                     <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100">
                       <p className="text-sm text-gray-500">Page {qrPage} sur {qrTotalPages} — {qrScans.length} scan{qrScans.length > 1 ? "s" : ""}</p>
-                      <div className="flex items-center gap-1">
+                      <div className="flex flex-wrap items-center gap-1">
                         <button onClick={() => setQrPage((p) => Math.max(1, p - 1))} disabled={qrPage === 1} className="w-8 h-8 rounded-md border border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-300 disabled:opacity-40 transition-colors">
                           <ChevronLeft className="w-4 h-4" />
                         </button>
-                        {Array.from({ length: qrTotalPages }, (_, i) => i + 1).map((page) => (
-                          <button key={page} onClick={() => setQrPage(page)} className="w-8 h-8 rounded-md text-sm font-medium transition-colors border"
-                            style={page === qrPage ? { backgroundColor: VITOGAZ_GREEN, color: "white", borderColor: VITOGAZ_GREEN } : { borderColor: "#e5e7eb", color: "#374151" }}>
-                            {page}
-                          </button>
-                        ))}
+                        {generatePages(qrPage, qrTotalPages).map((item, idx) =>
+                          item === "dots" ? (
+                            <span key={`dots-${idx}`} className="w-8 h-8 flex items-center justify-center text-gray-400 text-sm">…</span>
+                          ) : (
+                            <button key={item} onClick={() => setQrPage(item as number)} className="w-8 h-8 rounded-md text-sm font-medium transition-colors border"
+                              style={item === qrPage ? { backgroundColor: VITOGAZ_GREEN, color: "white", borderColor: VITOGAZ_GREEN } : { borderColor: "#e5e7eb", color: "#374151" }}>
+                              {item}
+                            </button>
+                          )
+                        )}
                         <button onClick={() => setQrPage((p) => Math.min(qrTotalPages, p + 1))} disabled={qrPage === qrTotalPages} className="w-8 h-8 rounded-md border border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-300 disabled:opacity-40 transition-colors">
                           <ChevronRight className="w-4 h-4" />
                         </button>
