@@ -7,73 +7,83 @@ interface PaginationProps {
   currentPage: number
   totalPages: number
   onPageChange: (page: number) => void
+  siblingsCount?: number
 }
 
-export function Pagination({ currentPage, totalPages, onPageChange }: PaginationProps) {
-  const pages = []
-  const maxVisiblePages = 5
-
-  let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2))
-  let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
-
-  if (endPage - startPage + 1 < maxVisiblePages) {
-    startPage = Math.max(1, endPage - maxVisiblePages + 1)
+function generatePages(
+  current: number,
+  total: number,
+  siblings: number
+): (number | "dots")[] {
+  // Si assez peu de pages, tout afficher
+  const totalSlots = siblings * 2 + 5 // first + last + current + 2 ellipsis
+  if (total <= totalSlots) {
+    return Array.from({ length: total }, (_, i) => i + 1)
   }
 
-  for (let i = startPage; i <= endPage; i++) {
-    pages.push(i)
+  const left = Math.max(current - siblings, 2)
+  const right = Math.min(current + siblings, total - 1)
+
+  const result: (number | "dots")[] = [1]
+
+  if (left > 2) {
+    result.push("dots")
+  } else {
+    for (let i = 2; i < left; i++) result.push(i)
   }
+
+  for (let i = left; i <= right; i++) result.push(i)
+
+  if (right < total - 1) {
+    result.push("dots")
+  } else {
+    for (let i = right + 1; i < total; i++) result.push(i)
+  }
+
+  result.push(total)
+  return result
+}
+
+export function Pagination({
+  currentPage,
+  totalPages,
+  onPageChange,
+  siblingsCount = 1,
+}: PaginationProps) {
+  const pages = generatePages(currentPage, totalPages, siblingsCount)
 
   return (
-    <div className="flex items-center justify-center gap-2 mt-6">
+    <div className="flex flex-wrap items-center justify-center gap-1 sm:gap-2 mt-6">
       <Button
         variant="outline"
         size="sm"
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
+        aria-label="Page précédente"
       >
         <ChevronLeft className="h-4 w-4" />
       </Button>
 
-      {startPage > 1 && (
-        <>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onPageChange(1)}
+      {pages.map((page, idx) =>
+        page === "dots" ? (
+          <span
+            key={`dots-${idx}`}
+            className="flex h-8 w-8 items-center justify-center text-muted-foreground"
+            aria-hidden
           >
-            1
-          </Button>
-          {startPage > 2 && (
-            <MoreHorizontal className="h-4 w-4 text-gray-400" />
-          )}
-        </>
-      )}
-
-      {pages.map((page) => (
-        <Button
-          key={page}
-          variant={page === currentPage ? "default" : "outline"}
-          size="sm"
-          onClick={() => onPageChange(page)}
-        >
-          {page}
-        </Button>
-      ))}
-
-      {endPage < totalPages && (
-        <>
-          {endPage < totalPages - 1 && (
-            <MoreHorizontal className="h-4 w-4 text-gray-400" />
-          )}
+            <MoreHorizontal className="h-4 w-4" />
+          </span>
+        ) : (
           <Button
-            variant="outline"
+            key={page}
+            variant={page === currentPage ? "default" : "outline"}
             size="sm"
-            onClick={() => onPageChange(totalPages)}
+            onClick={() => onPageChange(page)}
+            aria-current={page === currentPage ? "page" : undefined}
           >
-            {totalPages}
+            {page}
           </Button>
-        </>
+        )
       )}
 
       <Button
@@ -81,6 +91,7 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
         size="sm"
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
+        aria-label="Page suivante"
       >
         <ChevronRight className="h-4 w-4" />
       </Button>
