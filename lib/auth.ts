@@ -1,6 +1,20 @@
+const AUTH_COOKIE = 'vito_auth_token'
+
+// Témoin de session lu par middleware.ts pour rediriger vers /login. Il ne prouve rien :
+// la sécurité réelle reste la vérification du jeton par le backend à chaque appel API.
+function setAuthCookie() {
+  const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+  document.cookie = `${AUTH_COOKIE}=1; Path=/; SameSite=Lax${secure}`
+}
+
+function clearAuthCookie() {
+  document.cookie = `${AUTH_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`
+}
+
 export function setAuthToken(token: string) {
   if (typeof window !== 'undefined') {
     localStorage.setItem('vito_auth_token', token)
+    setAuthCookie()
   }
 }
 
@@ -14,6 +28,7 @@ export function getAuthToken(): string | null {
 export function removeAuthToken() {
   if (typeof window !== 'undefined') {
     localStorage.removeItem('vito_auth_token')
+    clearAuthCookie()
   }
 }
 
@@ -54,5 +69,6 @@ export function removeUserSession() {
     localStorage.removeItem('vito_auth_token')
     localStorage.removeItem('vito_user_role')
     localStorage.removeItem('vito_user_email')
+    clearAuthCookie()
   }
 }

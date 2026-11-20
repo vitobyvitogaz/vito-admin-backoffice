@@ -1,4 +1,4 @@
-import { getAuthToken } from './auth';
+import { getAuthToken, removeUserSession } from './auth';
 import { toast } from './use-toast';
 
 /**
@@ -42,9 +42,7 @@ export async function apiFetch(
       });
 
       // Clear token
-      localStorage.removeItem('vito_auth_token');
-      localStorage.removeItem('vito_user_role');
-      localStorage.removeItem('vito_user_email');
+      removeUserSession();
 
       // Rediriger après 1.5s pour laisser le toast s'afficher
       setTimeout(() => {
