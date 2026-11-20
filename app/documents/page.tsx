@@ -407,6 +407,9 @@ export default function DocumentsPage() {
                     ) : (
                       <>
                         <Label htmlFor="file">Fichier PDF {!editingId && "*"}</Label>
+                        <p className="text-xs text-gray-500 mt-1">
+                          PDF uniquement (10 Mo max). Pour une vidéo, choisissez la catégorie « Vidéo (YouTube) » et collez le lien.
+                        </p>
                         <div className="mt-1">
                           <input
                             type="file"
