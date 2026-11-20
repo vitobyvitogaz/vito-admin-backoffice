@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { apiGet, apiPost, apiPatch, apiDelete } from "@/lib/api";
 import { toast } from "@/lib/use-toast";
+import { getAuthToken } from "@/lib/auth";
 import { Header } from "@/components/Header";
 import { Navigation } from "@/components/Navigation";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
@@ -200,13 +201,19 @@ export default function DocumentsPage() {
       try {
         const formDataUpload = new FormData();
         formDataUpload.append('file', file);
+        const token = getAuthToken();
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/documents/upload`, {
           method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
           body: formDataUpload,
         });
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Erreur lors de l\'upload');
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(
+            response.status === 401
+              ? 'Session expirée, reconnectez-vous'
+              : errorData.message || `Erreur lors de l'upload (${response.status})`
+          );
         }
         const { file_url, file_size } = await response.json();
         // Calculer la taille en MB depuis les bytes retournés par le backend
