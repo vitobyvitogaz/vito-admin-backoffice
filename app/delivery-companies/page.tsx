@@ -17,6 +17,7 @@ import {
 import { toast } from "@/lib/use-toast";
 import { apiGet, apiPatch, apiPost, apiDelete } from "@/lib/api"; // ← apiGet ajouté
 import { exportToCSV } from "@/lib/export-csv";
+import { getAuthToken } from "@/lib/auth";
 import { Header } from "@/components/Header";
 import { Navigation } from "@/components/Navigation";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
@@ -368,13 +369,28 @@ export default function DeliveryCompaniesPage() {
       setUploading(true);
       const fd = new FormData();
       fd.append('file', file);
-      const response = await fetch(`${API_URL}/delivery-companies/upload-logo`, { method: 'POST', body: fd });
-      if (!response.ok) throw new Error('Erreur upload');
+      const token = getAuthToken();
+      const response = await fetch(`${API_URL}/delivery-companies/upload-logo`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        const detail = typeof err.message === 'string' ? err.message : '';
+        throw new Error(
+          response.status === 401
+            ? 'Session expirée, reconnectez-vous'
+            : `${detail || 'Erreur serveur'} (${response.status})`
+        );
+      }
       const data = await response.json();
       setFormData((prev) => ({ ...prev, logo_url: data.file_url }));
       toast({ title: "Succès !", description: "Logo uploadé avec succès" });
-    } catch {
-      toast({ title: "Erreur", description: "Erreur lors de l'upload du logo", variant: "destructive" });
+    } catch (error) {
+      console.error("Erreur upload logo:", error);
+      const message = error instanceof Error ? error.message : "Erreur inconnue";
+      toast({ title: "Erreur", description: `Upload du logo impossible : ${message}`, variant: "destructive" });
     } finally {
       setUploading(false);
     }
