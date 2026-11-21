@@ -15,6 +15,7 @@ import {
 import { apiGet, apiPost, apiPatch } from "@/lib/api";
 import { toast } from "@/lib/use-toast";
 import { ZoneSelector } from "@/components/ZoneSelector";
+import { InviteStatsCard } from "@/components/InviteStatsCard";
 import { Header } from "@/components/Header";
 import { Navigation } from "@/components/Navigation";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
@@ -300,6 +301,9 @@ export default function NotificationsPage() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Invitation à activer les notifications (compteurs anonymes) */}
+            <InviteStatsCard />
 
             {/* Zones compactes */}
             {zoneEntries.length > 0 && (
